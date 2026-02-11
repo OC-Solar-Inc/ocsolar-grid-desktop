@@ -22,6 +22,11 @@ mac:
         - x64
   icon: build/icon.icns
   darkModeSupport: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # notarize: true  # TODO: fix Apple credentials, enable later
 
 dmg:
   contents:

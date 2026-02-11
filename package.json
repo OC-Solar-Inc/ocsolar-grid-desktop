@@ -31,12 +31,14 @@
     "firebase": "^10.14.1",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
-    "zone.js": "~0.13.0"
+    "zone.js": "~0.13.0",
+    "@ocsolar/grid": "github:OC-Solar-Inc/ocsolar-grid-lib#main"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^16.1.6",
     "@angular/cli": "~16.1.6",
     "@angular/compiler-cli": "^16.1.0",
+    "@electron/notarize": "^3.1.1",
     "@types/jasmine": "~4.3.0",
     "concurrently": "^9.2.1",
     "electron": "^40.3.0",
