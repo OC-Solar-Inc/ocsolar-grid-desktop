@@ -31,8 +31,7 @@
     "firebase": "^10.14.1",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
-    "zone.js": "~0.13.0",
-    "@ocsolar/grid": "git+https://github.com/OC-Solar-Inc/ocsolar-grid-lib.git#main"
+    "zone.js": "~0.13.0"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^16.1.6",

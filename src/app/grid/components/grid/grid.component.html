@@ -1,0 +1,187 @@
+<div class="grid-container">
+  <!-- Notification Permission Banner -->
+  <div class="notification-banner" *ngIf="notificationBannerVisible">
+    <div class="notification-banner-content">
+      <mat-icon>notifications_active</mat-icon>
+      <span>Enable desktop notifications to stay updated on new messages.</span>
+    </div>
+    <div class="notification-banner-actions">
+      <button class="notification-enable-btn" (click)="enableNotifications()">Enable</button>
+      <button mat-icon-button class="notification-dismiss-btn" (click)="dismissNotificationBanner()">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Header -->
+  <div class="mobile-header" *ngIf="isMobileView">
+    <button mat-icon-button (click)="toggleSidebar()" *ngIf="currentChannel">
+      <mat-icon>menu</mat-icon>
+    </button>
+    <span class="channel-name" *ngIf="currentChannel">
+      <ng-container *ngIf="currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct'; else channelIcon">
+        <img *ngIf="currentChannel.dm_user?.avatar_url" [src]="currentChannel.dm_user?.avatar_url" class="dm-header-avatar" alt="">
+        <span *ngIf="!currentChannel.dm_user?.avatar_url" class="dm-header-avatar-placeholder">
+          {{ (currentChannel.dm_user?.display_name || 'DM').charAt(0).toUpperCase() }}
+        </span>
+      </ng-container>
+      <ng-template #channelIcon>
+        <mat-icon>tag</mat-icon>
+      </ng-template>
+      {{ (currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct') ? (currentChannel.dm_user?.display_name || 'Direct Message') : currentChannel.name }}
+    </span>
+    <span class="connection-status" [class.connected]="connectionState === 'connected'"
+          [class.connecting]="connectionState === 'connecting' || connectionState === 'reconnecting'">
+      <mat-icon *ngIf="connectionState === 'connected'">wifi</mat-icon>
+      <mat-icon *ngIf="connectionState !== 'connected'">wifi_off</mat-icon>
+    </span>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="grid-content">
+    <!-- Sidebar / Channel List -->
+    <aside class="sidebar" [class.open]="isSidebarOpen" [class.mobile]="isMobileView">
+      <lib-channel-list
+        [channels]="channels"
+        [currentChannel]="currentChannel"
+        [isLoading]="isLoadingChannels"
+        [users]="users"
+        (channelSelected)="selectChannel($event)"
+        (channelCreated)="onChannelCreated($event)"
+        (dmSelected)="onDmSelected($event)"
+        (groupCreated)="onGroupCreated($event)"
+        (markAllReadRequested)="onMarkAllAsRead()"
+        (activityItemSelected)="onActivityItemSelected($event)">
+      </lib-channel-list>
+    </aside>
+
+    <!-- Mobile Overlay -->
+    <div class="sidebar-overlay"
+         *ngIf="isMobileView && isSidebarOpen && currentChannel"
+         (click)="toggleSidebar()">
+    </div>
+
+    <!-- Main Chat Area -->
+    <main class="chat-area" [class.has-thread]="isThreadPanelOpen" [class.has-files]="isFilesPanelOpen">
+      <ng-container *ngIf="currentChannel; else noChannelSelected">
+        <!-- Channel Header (Desktop) -->
+        <div class="channel-header" *ngIf="!isMobileView">
+          <div class="channel-info">
+            <ng-container *ngIf="currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct'; else desktopChannelIcon">
+              <img *ngIf="currentChannel.dm_user?.avatar_url" [src]="currentChannel.dm_user?.avatar_url" class="dm-header-avatar" alt="">
+              <span *ngIf="!currentChannel.dm_user?.avatar_url" class="dm-header-avatar-placeholder">
+                {{ (currentChannel.dm_user?.display_name || 'DM').charAt(0).toUpperCase() }}
+              </span>
+            </ng-container>
+            <ng-template #desktopChannelIcon>
+              <mat-icon>tag</mat-icon>
+            </ng-template>
+            <h2>{{ (currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct') ? (currentChannel.dm_user?.display_name || 'Direct Message') : currentChannel.name }}</h2>
+            <span class="channel-description" *ngIf="currentChannel.description">
+              {{ currentChannel.description }}
+            </span>
+          </div>
+          <div class="channel-actions">
+            <!-- Group Members Button - only for group channels -->
+            <button
+              *ngIf="currentChannel?.channel_type === 'group'"
+              mat-icon-button
+              class="members-button"
+              [class.active]="isMembersPopupOpen"
+              (click)="toggleMembersPopup($event)"
+              matTooltip="Group Members"
+            >
+              <mat-icon>group</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              class="files-button"
+              [class.active]="isFilesPanelOpen"
+              (click)="toggleFilesPanel()"
+              matTooltip="Channel Files"
+            >
+              <mat-icon>folder</mat-icon>
+            </button>
+            <span class="connection-indicator" [class.connected]="connectionState === 'connected'">
+              <mat-icon *ngIf="connectionState === 'connected'" matTooltip="Connected">wifi</mat-icon>
+              <mat-icon *ngIf="connectionState === 'connecting'" matTooltip="Connecting...">sync</mat-icon>
+              <mat-icon *ngIf="connectionState === 'reconnecting'" matTooltip="Reconnecting...">sync_problem</mat-icon>
+              <mat-icon *ngIf="connectionState === 'disconnected'" matTooltip="Disconnected">wifi_off</mat-icon>
+            </span>
+          </div>
+
+          <!-- Members Popup -->
+          <ng-container *ngIf="isMembersPopupOpen && currentChannel?.channel_type === 'group'">
+            <div class="members-popup-backdrop" (click)="closeMembersPopup()"></div>
+            <lib-group-members-popup
+              [channelId]="currentChannel.id"
+              [channelName]="currentChannel.name"
+              [users]="channelListRef?.filteredUsersForGroup || []"
+              [userMap]="userMap"
+              [currentUserId]="currentUserId"
+              (close)="closeMembersPopup()"
+              (membersChanged)="onMembersChanged()">
+            </lib-group-members-popup>
+          </ng-container>
+        </div>
+
+        <!-- Messages List -->
+        <lib-message-list
+          [messages]="messages"
+          [isLoading]="isLoadingMessages"
+          [hasMore]="hasMoreMessages"
+          [typingUsers]="typingUsers"
+          [userMap]="userMap"
+          [currentUserId]="currentUserId"
+          [unreadCountOnEntry]="unreadCountOnEntry"
+          (loadMore)="loadMoreMessages()"
+          (openThread)="openThreadPanel($event)">
+        </lib-message-list>
+
+        <!-- Message Input -->
+        <lib-message-input
+          [channelId]="currentChannel.id"
+          [channelName]="(currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct') ? (currentChannel.dm_user?.display_name || 'Direct Message') : currentChannel.name"
+          [disabled]="connectionState === 'disconnected'"
+          [userMap]="userMap"
+          [channel]="currentChannel"
+          (messageSent)="sendMessage($event)"
+          (typingStarted)="onTypingStarted()"
+          (typingStopped)="onTypingStopped()">
+        </lib-message-input>
+      </ng-container>
+
+      <!-- No Channel Selected -->
+      <ng-template #noChannelSelected>
+        <div class="no-channel-selected">
+          <img class="grid-icon" [src]="currentTheme === 'midnight' || currentTheme === 'aidansTheme' ? 'assets/images/Grid_White.png' : 'assets/images/Grid_Black.png'" alt="Grid" />
+          <h2>Welcome to the Grid</h2>
+          <p>Where everyone connects in one place. Select a channel or start a conversation to begin chatting.</p>
+        </div>
+      </ng-template>
+    </main>
+
+    <!-- Thread Panel -->
+    <aside class="thread-panel" *ngIf="isThreadPanelOpen && threadParentMessage" [class.mobile]="isMobileView">
+      <lib-thread-panel
+        [parentMessage]="threadParentMessage"
+        [replies]="threadReplies"
+        [channelName]="currentChannel?.name || ''"
+        [userMap]="userMap"
+        [channelId]="currentChannel?.id || ''"
+        [channel]="currentChannel"
+        (close)="closeThreadPanel()"
+        (replySent)="sendThreadReply($event)">
+      </lib-thread-panel>
+    </aside>
+
+    <!-- Files Panel -->
+    <aside class="files-panel" *ngIf="isFilesPanelOpen && currentChannel" [class.mobile]="isMobileView">
+      <lib-channel-files-panel
+        [channelId]="currentChannel.id"
+        [channelName]="(currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct') ? (currentChannel.dm_user?.display_name || 'Direct Message') : currentChannel.name"
+        (close)="closeFilesPanel()">
+      </lib-channel-files-panel>
+    </aside>
+  </div>
+</div>

@@ -1,0 +1,1094 @@
+// Grid Chat - Blue theme matching app sidenav
+// Default Colors (Light/Ocean theme)
+$sidebar-bg: #5aaad0;
+$sidebar-hover: #4a9bc2;
+$sidebar-active: #3d8ab0;
+$sidebar-text: rgba(255, 255, 255, 0.9);
+$sidebar-text-muted: rgba(255, 255, 255, 0.6);
+$main-bg: #ffffff;
+$border-color: #e0e0e0;
+$text-primary: #1d1c1d;
+$text-secondary: #616061;
+$accent-color: #2c688d;
+$online-green: #2eb67d;
+
+// CSS Variables for theming
+:host {
+  // Light theme (default)
+  // Sidebar
+  --grid-sidebar-bg: #5aaad0;
+  --grid-sidebar-hover: #4a9bc2;
+  --grid-sidebar-active: #3d8ab0;
+  --grid-sidebar-text: rgba(255, 255, 255, 0.9);
+  --grid-sidebar-text-muted: rgba(255, 255, 255, 0.6);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.1);
+  --grid-online-indicator-border: #5aaad0;
+
+  // Chat area
+  --grid-chat-bg: #ffffff;
+  --grid-chat-text: #1d1c1d;
+  --grid-chat-text-muted: #616061;
+  --grid-chat-border: #e0e0e0;
+  --grid-chat-hover: #f8f8f8;
+  --grid-chat-accent: #1264a3;
+  --grid-chat-input-bg: #ffffff;
+  --grid-chat-own-message-bg: #e3f2fd;
+  --grid-chat-own-message-text: #1d1c1d;
+  --grid-chat-other-message-bg: #f8f8f8;
+}
+
+// Solar theme (California Sun)
+:host.theme-solar {
+  // Sidebar
+  --grid-sidebar-bg: #E65100;
+  --grid-sidebar-hover: #D84315;
+  --grid-sidebar-active: #BF360C;
+  --grid-sidebar-text: #ffffff;
+  --grid-sidebar-text-muted: rgba(255, 255, 255, 0.7);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.15);
+  --grid-online-indicator-border: #E65100;
+
+  // Chat area
+  --grid-chat-bg: #FFF8E1;
+  --grid-chat-text: #3E2723;
+  --grid-chat-text-muted: #6D4C41;
+  --grid-chat-border: #FFE0B2;
+  --grid-chat-hover: #FFECB3;
+  --grid-chat-accent: #E65100;
+  --grid-chat-input-bg: #ffffff;
+  --grid-chat-own-message-bg: #FFE0B2;
+  --grid-chat-own-message-text: #3E2723;
+  --grid-chat-other-message-bg: #ffffff;
+}
+
+// Solar Panel theme (Solar Energy - for solar installation company)
+:host.theme-solarPanel {
+  // Sidebar - Deep blue like solar panels
+  --grid-sidebar-bg: #0D47A1;
+  --grid-sidebar-hover: #1565C0;
+  --grid-sidebar-active: #0A3D91;
+  --grid-sidebar-text: #ffffff;
+  --grid-sidebar-text-muted: rgba(255, 255, 255, 0.7);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.15);
+  --grid-online-indicator-border: #0D47A1;
+
+  // Chat area - Clean with green energy accents
+  --grid-chat-bg: #FAFAFA;
+  --grid-chat-text: #1a1a1a;
+  --grid-chat-text-muted: #616161;
+  --grid-chat-border: #E0E0E0;
+  --grid-chat-hover: #F5F5F5;
+  --grid-chat-accent: #2E7D32;
+  --grid-chat-input-bg: #ffffff;
+  --grid-chat-own-message-bg: #C8E6C9;
+  --grid-chat-own-message-text: #1a1a1a;
+  --grid-chat-other-message-bg: #E3F2FD;
+}
+
+// "Definitely Not Slack™" theme - A completely original design we came up with ourselves
+:host.theme-totallyOriginal {
+  // Sidebar - A very original aubergine color we invented
+  --grid-sidebar-bg: #4A154B;
+  --grid-sidebar-hover: #350d36;
+  --grid-sidebar-active: #1164A3;
+  --grid-sidebar-text: #ffffff;
+  --grid-sidebar-text-muted: rgba(255, 255, 255, 0.7);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.1);
+  --grid-online-indicator-border: #4A154B;
+
+  // Chat area - Totally unique white background, no bubbles like a certain app
+  --grid-chat-bg: #ffffff;
+  --grid-chat-text: #1d1c1d;
+  --grid-chat-text-muted: #616061;
+  --grid-chat-border: #dddddd;
+  --grid-chat-hover: #f8f8f8;
+  --grid-chat-accent: #1264a3;
+  --grid-chat-input-bg: #ffffff;
+  --grid-chat-own-message-bg: transparent;
+  --grid-chat-own-message-text: #1d1c1d;
+  --grid-chat-other-message-bg: transparent;
+}
+
+// OC Solar 2 - Blue Sapphire + Honey Yellow
+:host.theme-ocSolar2 {
+  // Sidebar - Blue Sapphire
+  --grid-sidebar-bg: #00698f;
+  --grid-sidebar-hover: #007aa3;
+  --grid-sidebar-active: #005a7a;
+  --grid-sidebar-text: #ffffff;
+  --grid-sidebar-text-muted: rgba(255, 255, 255, 0.7);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.15);
+  --grid-online-indicator-border: #00698f;
+
+  // Chat area - Clean white with Honey Yellow accents
+  --grid-chat-bg: #ffffff;
+  --grid-chat-text: #1d1c1d;
+  --grid-chat-text-muted: #616061;
+  --grid-chat-border: #e0e0e0;
+  --grid-chat-hover: #f8f8f8;
+  --grid-chat-accent: #00698f;
+  --grid-chat-input-bg: #ffffff;
+  --grid-chat-own-message-bg: #FFB71B;
+  --grid-chat-own-message-text: #0A2240;
+  --grid-chat-other-message-bg: #E8F4F8;
+}
+
+// The Grid (OC Solar 1) - Oxford Blue + Red NCS
+:host.theme-theGrid {
+  // Sidebar - Oxford Blue (dark navy)
+  --grid-sidebar-bg: #0A2240;
+  --grid-sidebar-hover: #132d4e;
+  --grid-sidebar-active: #051830;
+  --grid-sidebar-text: #ffffff;
+  --grid-sidebar-text-muted: rgba(255, 255, 255, 0.7);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.12);
+  --grid-online-indicator-border: #0A2240;
+
+  // Chat area - Clean white with Red NCS accents
+  --grid-chat-bg: #ffffff;
+  --grid-chat-text: #1d1c1d;
+  --grid-chat-text-muted: #616061;
+  --grid-chat-border: #e0e0e0;
+  --grid-chat-hover: #f8f8f8;
+  --grid-chat-accent: #C10230;
+  --grid-chat-input-bg: #ffffff;
+  --grid-chat-own-message-bg: #C10230;
+  --grid-chat-own-message-text: #ffffff;
+  --grid-chat-other-message-bg: #F0F4F8;
+}
+
+// Noir theme - Elegant black and white with silver accents
+:host.theme-noir {
+  // Sidebar - Deep sophisticated black
+  --grid-sidebar-bg: #0a0a0a;
+  --grid-sidebar-hover: #1a1a1a;
+  --grid-sidebar-active: #252525;
+  --grid-sidebar-text: #fafafa;
+  --grid-sidebar-text-muted: rgba(250, 250, 250, 0.5);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.08);
+  --grid-online-indicator-border: #0a0a0a;
+
+  // Chat area - Clean white with refined grays
+  --grid-chat-bg: #fafafa;
+  --grid-chat-text: #0a0a0a;
+  --grid-chat-text-muted: #737373;
+  --grid-chat-border: #e5e5e5;
+  --grid-chat-hover: #f5f5f5;
+  --grid-chat-accent: #525252;
+  --grid-chat-input-bg: #ffffff;
+  --grid-chat-own-message-bg: #0a0a0a;
+  --grid-chat-own-message-text: #fafafa;
+  --grid-chat-other-message-bg: #f0f0f0;
+}
+
+// Midnight theme - Dark mode with black and gray tones
+:host.theme-midnight {
+  // Sidebar - Deep black
+  --grid-sidebar-bg: #121212;
+  --grid-sidebar-hover: #1e1e1e;
+  --grid-sidebar-active: #2a2a2a;
+  --grid-sidebar-text: #e0e0e0;
+  --grid-sidebar-text-muted: rgba(224, 224, 224, 0.6);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.08);
+  --grid-online-indicator-border: #121212;
+
+  // Chat area - Dark with gray accents
+  --grid-chat-bg: #1a1a1a;
+  --grid-chat-text: #e0e0e0;
+  --grid-chat-text-muted: #9e9e9e;
+  --grid-chat-border: #2d2d2d;
+  --grid-chat-hover: #252525;
+  --grid-chat-accent: #8ab4f8;
+  --grid-chat-input-bg: #242424;
+  --grid-chat-own-message-bg: #3d3d3d;
+  --grid-chat-own-message-text: #ffffff;
+  --grid-chat-other-message-bg: #2d2d2d;
+}
+
+// Aidan's Theme - Dark navy with teal accents
+:host.theme-aidansTheme {
+  // Sidebar - Deep navy
+  --grid-sidebar-bg: #10171e;
+  --grid-sidebar-hover: #192734;
+  --grid-sidebar-active: #1e2e3d;
+  --grid-sidebar-text: #e8eaed;
+  --grid-sidebar-text-muted: rgba(232, 234, 237, 0.6);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.08);
+  --grid-online-indicator-border: #10171e;
+
+  // Chat area - Dark navy with teal accents
+  --grid-chat-bg: #15202b;
+  --grid-chat-text: #e8eaed;
+  --grid-chat-text-muted: #8899a6;
+  --grid-chat-border: #192734;
+  --grid-chat-hover: #192734;
+  --grid-chat-accent: #00897b;
+  --grid-chat-input-bg: #192734;
+  --grid-chat-own-message-bg: #00564d;
+  --grid-chat-own-message-text: #ffffff;
+  --grid-chat-other-message-bg: #192734;
+}
+
+// Lucas' Theme
+// Color Reference:
+// Pink #FC5FA3 - Keywords (mentions)
+// Purple #B181F1 - Methods/functions
+// Coral #FC6A5D - Strings (alerts, unread)
+// Green #67B7A4 - Comments (timestamps, muted)
+// Cyan #5DD8FF - Types (links, highlights)
+// Gold #D0BF69 - Numbers
+// Orange #FD8F3F - Attributes
+:host.theme-lucasTheme {
+  // Sidebar (dark charcoal)
+  --grid-sidebar-bg: #1E1E1E;
+  --grid-sidebar-hover: #2A2A2A;
+  --grid-sidebar-active: #37373D;
+  --grid-sidebar-text: #CCCCCC;
+  --grid-sidebar-text-muted: #6A6A6A;
+  --grid-sidebar-border: #3C3C3C;
+  --grid-online-indicator-border: #1E1E1E;
+
+  // Chat area (dark monochrome)
+  --grid-chat-bg: #1E1E1E;
+  --grid-chat-text: #D4D4D4;
+  --grid-chat-text-muted: #67B7A4; // green
+  --grid-chat-border: #3C3C3C;
+  --grid-chat-hover: #2A2A2A;
+  --grid-chat-accent: #5DD8FF; // cyan
+  --grid-chat-input-bg: #252526;
+  // Subtle message bubbles - tonal shifts
+  --grid-chat-own-message-bg: #2D2D30;
+  --grid-chat-own-message-text: #D4D4D4;
+  --grid-chat-other-message-bg: #252526;
+}
+
+// Tesla theme - Modern glassmorphism with Tesla red accents
+:host.theme-tesla {
+  // Sidebar - Dark Tesla aesthetic
+  --grid-sidebar-bg: #171a20;
+  --grid-sidebar-hover: #21252d;
+  --grid-sidebar-active: #2a2f38;
+  --grid-sidebar-text: #ffffff;
+  --grid-sidebar-text-muted: rgba(255, 255, 255, 0.6);
+  --grid-sidebar-border: rgba(255, 255, 255, 0.08);
+  --grid-online-indicator-border: #171a20;
+
+  // Chat area - Light with glassmorphism
+  --grid-chat-bg: linear-gradient(135deg, #f5f5f7 0%, #e8e8ed 100%);
+  --grid-chat-text: #1d1d1f;
+  --grid-chat-text-muted: #6e6e73;
+  --grid-chat-border: rgba(0, 0, 0, 0.08);
+  --grid-chat-hover: rgba(255, 255, 255, 0.6);
+  --grid-chat-accent: #E82127;
+  --grid-chat-input-bg: rgba(255, 255, 255, 0.8);
+  // Glass effect message bubbles
+  --grid-chat-own-message-bg: rgba(232, 33, 39, 0.9);
+  --grid-chat-own-message-text: #ffffff;
+  --grid-chat-other-message-bg: rgba(255, 255, 255, 0.7);
+  // Glass effect variables
+  --grid-glass-blur: 20px;
+  --grid-glass-border: rgba(255, 255, 255, 0.2);
+}
+
+.grid-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: $main-bg;
+}
+
+// Mobile Header
+.mobile-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--grid-sidebar-bg);
+  color: var(--grid-sidebar-text);
+  gap: 8px;
+  z-index: 100;
+
+  .channel-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    font-weight: 600;
+    font-size: 16px;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    .dm-header-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      object-fit: cover;
+    }
+
+    .dm-header-avatar-placeholder {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+    }
+  }
+
+  .connection-status {
+    display: flex;
+    align-items: center;
+
+    &.connected mat-icon {
+      color: $online-green;
+    }
+
+    &.connecting mat-icon {
+      color: #f2c744;
+      animation: pulse 1.5s infinite;
+    }
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  }
+}
+
+// Notification Permission Banner
+.notification-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: #e8750a;
+  color: #ffffff;
+  gap: 12px;
+  z-index: 100;
+
+  .notification-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    span {
+      font-size: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .notification-banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .notification-enable-btn {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 4px;
+    background: var(--grid-chat-accent, #1264a3);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover {
+      opacity: 0.9;
+    }
+  }
+
+  .notification-dismiss-btn {
+    color: rgba(255, 255, 255, 0.7);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    &:hover {
+      color: #ffffff;
+    }
+  }
+
+  @media (max-width: 768px) {
+    padding: 8px 12px;
+
+    .notification-banner-content span {
+      font-size: 13px;
+    }
+  }
+}
+
+// Main Content Layout
+.grid-content {
+  display: flex;
+  flex: 1;
+  min-height: 0; // Critical for nested flex scrolling
+  overflow: hidden;
+}
+
+// Sidebar
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  height: 100%;
+  background: var(--grid-sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  &.mobile {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+
+    &.open {
+      transform: translateX(0);
+    }
+  }
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 199;
+}
+
+// Chat Area
+.chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--grid-chat-bg);
+  border-left: 1px solid var(--grid-chat-border);
+
+  &.has-thread,
+  &.has-files {
+    @media (min-width: 1200px) {
+      max-width: calc(100% - 400px);
+    }
+  }
+}
+
+// Channel Header
+.channel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--grid-chat-border);
+  min-height: 56px;
+
+  .channel-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    mat-icon {
+      color: var(--grid-chat-text-muted);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    .dm-header-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      object-fit: cover;
+    }
+
+    .dm-header-avatar-placeholder {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      background: var(--grid-sidebar-bg);
+      color: var(--grid-sidebar-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--grid-chat-text);
+    }
+
+    .channel-description {
+      color: var(--grid-chat-text-muted);
+      font-size: 13px;
+      margin-left: 8px;
+      padding-left: 8px;
+      border-left: 1px solid var(--grid-chat-border);
+    }
+  }
+
+  .channel-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .members-button,
+    .files-button {
+      color: var(--grid-chat-text-muted);
+
+      &:hover {
+        color: var(--grid-chat-text);
+        background: var(--grid-chat-hover);
+      }
+
+      &.active {
+        color: var(--grid-chat-accent);
+        background: rgba(18, 100, 163, 0.1);
+      }
+
+      mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    .connection-indicator {
+      display: flex;
+      align-items: center;
+
+      mat-icon {
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+        color: var(--grid-chat-text-muted);
+      }
+
+      &.connected mat-icon {
+        color: $online-green;
+      }
+    }
+  }
+
+  // Members popup backdrop
+  .members-popup-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9998;
+    // Transparent backdrop - just captures clicks
+  }
+}
+
+// No Channel Selected
+.no-channel-selected {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--grid-chat-text-muted);
+  padding: 20px;
+
+  .grid-icon {
+    width: 320px;
+    height: auto;
+    margin-bottom: 24px;
+  }
+
+  mat-icon {
+    font-size: 64px;
+    width: 64px;
+    height: 64px;
+    color: var(--grid-chat-border);
+    margin-bottom: 16px;
+  }
+
+  h2 {
+    margin: 0 0 12px 0;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--grid-chat-text);
+  }
+
+  p {
+    margin: 0;
+    font-size: 18px;
+    text-align: center;
+    max-width: 450px;
+    line-height: 1.5;
+  }
+}
+
+// Thread Panel
+.thread-panel {
+  width: 400px;
+  min-width: 400px;
+  background: var(--grid-chat-bg);
+  border-left: 1px solid var(--grid-chat-border);
+  display: flex;
+  flex-direction: column;
+
+  &.mobile {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    z-index: 300;
+  }
+
+  @media (max-width: 1199px) {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 300;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// Files Panel
+.files-panel {
+  width: 400px;
+  min-width: 400px;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  background: var(--grid-chat-bg);
+  border-left: 1px solid var(--grid-chat-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  &.mobile {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    z-index: 300;
+  }
+
+  @media (max-width: 1199px) {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 300;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// Animations
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+// Scrollbar Styling
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .grid-content {
+    flex-direction: column;
+  }
+
+  .sidebar:not(.mobile) {
+    display: none;
+  }
+
+  .chat-area {
+    border-left: none;
+  }
+
+  .thread-panel,
+  .files-panel {
+    width: 100%;
+    min-width: 100%;
+  }
+}
+
+// The Grid theme - Mention styling for own messages
+:host.theme-theGrid {
+  // Make mentions white and bold inside own messages (red bubbles)
+  ::ng-deep .message-group.own-message .message-text .mention {
+    color: #ffffff;
+    font-weight: 700;
+    background-color: rgba(255, 255, 255, 0.2);
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.3);
+    }
+  }
+}
+
+// Aidan's Theme - Mention styling for own messages
+:host.theme-aidansTheme {
+  // Make mentions white and bold inside own messages (teal bubbles)
+  ::ng-deep .message-group.own-message .message-text .mention {
+    color: #ffffff;
+    font-weight: 700;
+    background-color: rgba(255, 255, 255, 0.2);
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.3);
+    }
+  }
+
+  // Make the grid icon white on dark background
+  .no-channel-selected .grid-icon {
+    filter: brightness(0) invert(1);
+  }
+}
+
+// Lucas' Theme - Comprehensive styling
+:host.theme-lucasTheme {
+  // ═══════════════════════════════════════════════════════════════
+  // MENTIONS - Pink (#FC5FA3)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .message-text .mention {
+    color: #FC5FA3;
+    font-weight: 600;
+    background-color: rgba(252, 95, 163, 0.15);
+    border-radius: 3px;
+    padding: 1px 4px;
+
+    &:hover {
+      background-color: rgba(252, 95, 163, 0.25);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TIMESTAMPS - Green (#67B7A4)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .message-time {
+    color: #67B7A4 !important;
+  }
+
+  ::ng-deep .dm-time {
+    color: #67B7A4 !important;
+  }
+
+  ::ng-deep .date-divider span {
+    color: #67B7A4;
+    border-color: #3C3C3C;
+    background: #1E1E1E;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LINKS & ACCENTS - Cyan (#5DD8FF)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep a {
+    color: #5DD8FF;
+
+    &:hover {
+      color: #7DE4FF;
+    }
+  }
+
+  ::ng-deep .thread-indicator {
+    color: #5DD8FF;
+
+    &:hover {
+      background: rgba(93, 216, 255, 0.1);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UNREAD BADGES - Coral (#FC6A5D)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .unread-badge,
+  ::ng-deep .mention-badge {
+    background: #FC6A5D !important;
+    color: #1E1E1E !important;
+    font-weight: 700;
+  }
+
+  // New messages divider - coral
+  ::ng-deep .new-divider {
+    &::before {
+      background: #FC6A5D;
+    }
+    span {
+      color: #FC6A5D;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ONLINE INDICATOR - Green (#67B7A4)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .online-indicator {
+    background: #67B7A4 !important;
+  }
+
+  ::ng-deep .connection-indicator.connected mat-icon {
+    color: #67B7A4 !important;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SENDER NAMES - Coral (#FC6A5D)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .sender-name {
+    color: #FC6A5D !important;
+  }
+
+  ::ng-deep .dm-name {
+    color: #CCCCCC;
+  }
+
+  ::ng-deep .dm-item.selected .dm-name,
+  ::ng-deep .dm-item:hover .dm-name {
+    color: #FC6A5D !important;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CHANNEL NAMES - Purple accent for active (#B181F1)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .channel-item.selected {
+    background: #2D2D30 !important;
+    border-left: 3px solid #B181F1;
+    padding-left: 21px;
+  }
+
+  ::ng-deep .dm-item.selected {
+    background: #2D2D30 !important;
+    border-left: 3px solid #B181F1;
+    padding-left: 21px;
+  }
+
+  // Unread channels - cyan highlight
+  ::ng-deep .channel-item.unread .channel-name,
+  ::ng-deep .dm-item.unread .dm-name {
+    color: #5DD8FF !important;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SECTION HEADERS - Gold (#D0BF69)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .section-header {
+    color: #6A6A6A;
+
+    &:hover {
+      color: #D0BF69;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // INPUT FOCUS - Purple border (#B181F1)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .message-input-container:focus-within {
+    border-color: #B181F1 !important;
+    box-shadow: 0 0 0 1px rgba(177, 129, 241, 0.3);
+  }
+
+  ::ng-deep .input-wrapper:focus-within {
+    border-color: #B181F1 !important;
+    box-shadow: 0 0 0 1px rgba(177, 129, 241, 0.3);
+  }
+
+  ::ng-deep .search-container:focus-within {
+    border: 1px solid #B181F1;
+    background: #252526;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // FILE ATTACHMENTS - Subtle with cyan accents
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .attachment-file {
+    background: #252526;
+    border-color: #3C3C3C;
+
+    .file-icon {
+      color: #5DD8FF;
+    }
+
+    &:hover {
+      border-color: #5DD8FF;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // EDITED INDICATOR - Orange (#FD8F3F)
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .edited-indicator {
+    color: #FD8F3F !important;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRID ICON & MISC
+  // ═══════════════════════════════════════════════════════════════
+  .no-channel-selected .grid-icon {
+    filter: brightness(0) invert(0.83);
+  }
+
+  .no-channel-selected h2 {
+    color: #D4D4D4;
+  }
+
+  .no-channel-selected p {
+    color: #67B7A4;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SCROLLBAR (subtle dark)
+  // ═══════════════════════════════════════════════════════════════
+  ::-webkit-scrollbar-thumb {
+    background: #424242;
+
+    &:hover {
+      background: #5A5A5A;
+    }
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #1E1E1E;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LOADING SPINNERS - Cyan
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .mat-mdc-progress-spinner circle {
+    stroke: #5DD8FF;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ACTION BUTTONS - Subtle with color on hover
+  // ═══════════════════════════════════════════════════════════════
+  ::ng-deep .message-actions .action-button:hover mat-icon {
+    color: #5DD8FF;
+  }
+
+  ::ng-deep .action-btn:hover,
+  ::ng-deep .filter-btn:hover {
+    color: #D0BF69 !important;
+  }
+}
+
+// Tesla theme - Glassmorphism enhancements
+:host.theme-tesla {
+  .chat-area {
+    background: linear-gradient(135deg, #f5f5f7 0%, #e8e8ed 100%);
+  }
+
+  // Glass effect for input area
+  ::ng-deep .message-input-container {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  // Glass effect for message bubbles
+  ::ng-deep .message-text {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  // Enhanced glass effect for other users' messages
+  ::ng-deep .message-group:not(.own-message) .message-text {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+  }
+
+  // Own message styling with Tesla red
+  ::ng-deep .message-group.own-message .message-text {
+    background: rgba(232, 33, 39, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 20px rgba(232, 33, 39, 0.3);
+  }
+
+  // Glass effect for channel header
+  .channel-header {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  // Glass effect for thread panel
+  ::ng-deep .thread-header {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  // Glass effect for thread reply input
+  ::ng-deep .input-wrapper {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  }
+}

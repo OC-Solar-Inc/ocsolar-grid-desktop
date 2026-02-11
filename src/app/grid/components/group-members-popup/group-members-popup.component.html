@@ -1,0 +1,118 @@
+<div class="popup-container">
+  <!-- Header -->
+  <div class="popup-header">
+    <h3>Members <span class="member-count" *ngIf="!isLoading">({{ members.length }})</span></h3>
+    <button mat-icon-button class="close-button" (click)="onClose()" matTooltip="Close">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-state" *ngIf="isLoading">
+    <mat-icon class="spinning">sync</mat-icon>
+    <span>Loading members...</span>
+  </div>
+
+  <!-- Members List -->
+  <div class="members-list" *ngIf="!isLoading">
+    <div class="member-item" *ngFor="let member of members">
+      <!-- Avatar -->
+      <div class="member-avatar">
+        <img *ngIf="getMemberAvatarUrl(member)" [src]="getMemberAvatarUrl(member)" alt="">
+        <span *ngIf="!getMemberAvatarUrl(member)" class="avatar-placeholder">
+          {{ getMemberInitials(member) }}
+        </span>
+      </div>
+
+      <!-- Member Info -->
+      <div class="member-info">
+        <span class="member-name">
+          {{ getMemberDisplayName(member) }}
+          <span *ngIf="member.user_id === currentUserId" class="you-badge">(you)</span>
+        </span>
+        <span class="member-role" [ngClass]="getRoleBadgeClass(member.role)">
+          {{ member.role }}
+        </span>
+      </div>
+
+      <!-- Remove Button -->
+      <button
+        *ngIf="canRemoveMember(member)"
+        mat-icon-button
+        class="remove-button"
+        (click)="removeMember(member)"
+        matTooltip="Remove from group"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Add Members Section -->
+  <div class="add-members-section" *ngIf="canAddMembers()">
+    <button
+      class="add-members-toggle"
+      (click)="toggleAddMembers()"
+      [class.expanded]="isAddingMembers"
+    >
+      <mat-icon>{{ isAddingMembers ? 'expand_less' : 'person_add' }}</mat-icon>
+      <span>{{ isAddingMembers ? 'Cancel' : 'Add Members' }}</span>
+    </button>
+
+    <!-- Expandable Add Members Panel -->
+    <div class="add-members-panel" *ngIf="isAddingMembers">
+      <!-- Search Input -->
+      <div class="search-input-container">
+        <mat-icon class="search-icon">search</mat-icon>
+        <input
+          type="text"
+          [(ngModel)]="searchQuery"
+          placeholder="Search users..."
+          class="search-input"
+        >
+      </div>
+
+      <!-- Selected Count -->
+      <div class="selected-count" *ngIf="selectedUserIds.size > 0">
+        {{ selectedUserIds.size }} user{{ selectedUserIds.size === 1 ? '' : 's' }} selected
+      </div>
+
+      <!-- User List -->
+      <div class="user-list">
+        <div
+          class="user-item"
+          *ngFor="let user of filteredUsersForAdd"
+          (click)="toggleUserSelection(user.id!)"
+          [class.selected]="isUserSelected(user.id!)"
+        >
+          <div class="user-avatar" [style.background]="user.avatarColor || '#1d1c1d'">
+            <img *ngIf="user.profileImage" [src]="user.profileImage" [alt]="getUserDisplayName(user)" class="user-avatar-img">
+            <span *ngIf="!user.profileImage">{{ getUserInitials(user) }}</span>
+          </div>
+          <div class="user-info">
+            <span class="user-name">{{ getUserDisplayName(user) }}</span>
+            <span class="user-role">{{ user.sRole }}</span>
+          </div>
+          <mat-icon class="check-icon" *ngIf="isUserSelected(user.id!)">check_circle</mat-icon>
+        </div>
+
+        <div class="no-results" *ngIf="filteredUsersForAdd.length === 0">
+          <span *ngIf="searchQuery">No employees found</span>
+          <span *ngIf="!searchQuery && users.length > 0">All employees are already members</span>
+          <span *ngIf="!searchQuery && users.length === 0">Loading employees...</span>
+        </div>
+      </div>
+
+      <!-- Add Button -->
+      <button
+        class="add-button"
+        [disabled]="selectedUserIds.size === 0 || isSubmitting"
+        (click)="addSelectedMembers()"
+      >
+        <mat-icon *ngIf="isSubmitting" class="spinning">sync</mat-icon>
+        <span *ngIf="!isSubmitting">Add {{ selectedUserIds.size }} Member{{ selectedUserIds.size === 1 ? '' : 's' }}</span>
+        <span *ngIf="isSubmitting">Adding...</span>
+      </button>
+    </div>
+  </div>
+</div>
