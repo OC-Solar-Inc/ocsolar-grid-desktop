@@ -27,7 +27,7 @@ jobs:
         run: npm run electron:compile
 
       - name: Build Mac DMGs
-        run: electron-builder --mac
+        run: npx electron-builder --mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
