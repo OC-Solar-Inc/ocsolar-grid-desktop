@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { AngularFirestore } from '@angular/fire/compat/firestore';
-import { GridUserDataProvider, User } from '@ocsolar/grid';
+import { GridUserDataProvider } from '../grid/tokens/grid-tokens';
+import { User } from '../grid/interfaces/user';
 import { map, catchError } from 'rxjs/operators';
 
 @Injectable({ providedIn: 'root' })

@@ -1,0 +1,181 @@
+<div class="message-list" #scrollContainer (scroll)="onScroll($event)">
+  <!-- Loading More Indicator -->
+  <div class="loading-more" *ngIf="isLoading && hasMore">
+    <mat-spinner diameter="20"></mat-spinner>
+    <span>Loading older messages...</span>
+  </div>
+
+  <!-- Load More Button -->
+  <div class="load-more" *ngIf="hasMore && !isLoading">
+    <button mat-button (click)="loadMore.emit()">Load older messages</button>
+  </div>
+
+  <!-- Messages -->
+  <ng-container *ngFor="let group of groupedMessages; trackBy: trackByGroupIndex">
+    <!-- Date Divider -->
+    <div class="date-divider" *ngIf="isDivider(group)">
+      <span>{{ group.date }}</span>
+    </div>
+
+    <!-- New Messages Divider -->
+    <div class="new-divider" *ngIf="isNewDivider(group)">
+      <span>New</span>
+    </div>
+
+    <!-- Message Group -->
+    <div class="message-group" *ngIf="isMessageGroup(group)" [class.own-message]="isOwnMessage(group)">
+      <!-- Avatar -->
+      <div class="message-avatar">
+        <div class="avatar" *ngIf="!group.avatarUrl" [style.background]="group.avatarColor">
+          {{ getInitials(group.displayName) }}
+        </div>
+        <img
+          *ngIf="group.avatarUrl"
+          [src]="group.avatarUrl"
+          [alt]="group.displayName"
+          class="avatar-image"
+          (error)="$any($event.target).style.display='none'"
+        />
+        <!-- Fallback initials shown if image fails to load -->
+        <div class="avatar avatar-fallback" *ngIf="group.avatarUrl" [style.background]="group.avatarColor">
+          {{ getInitials(group.displayName) }}
+        </div>
+      </div>
+
+      <!-- Messages Content -->
+      <div class="message-content">
+        <!-- Header (shown for first message in group) -->
+        <div class="message-header">
+          <span class="sender-name">{{ group.displayName }}</span>
+          <span class="message-time">{{ formatTime(group.firstTimestamp) }}</span>
+        </div>
+
+        <!-- Individual Messages -->
+        <div
+          *ngFor="let message of group.messages; trackBy: trackByMessageId"
+          class="message-item"
+          [class.pending]="message.pending"
+          [class.error]="message.error"
+        >
+          <!-- Message Text -->
+          <div class="message-text" *ngIf="message.content">
+            <span [innerHTML]="formatMessageContent(message.content)"></span>
+            <span class="edited-indicator" *ngIf="message.is_edited">(edited)</span>
+          </div>
+
+          <!-- Message Attachments -->
+          <div class="message-attachments" *ngIf="message.attachments && message.attachments.length > 0">
+            <ng-container *ngFor="let attachment of message.attachments; trackBy: trackByAttachmentId">
+              <!-- Image attachment -->
+              <div
+                *ngIf="isImageAttachment(attachment)"
+                class="attachment-image-container"
+              >
+                <a
+                  class="attachment-image"
+                  [href]="attachment.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [matTooltip]="'Open ' + attachment.original_filename"
+                >
+                  <img
+                    [src]="attachment.url"
+                    [alt]="attachment.original_filename"
+                    [style.max-width.px]="getImageMaxWidth(attachment)"
+                    loading="lazy"
+                  />
+                </a>
+                <button
+                  mat-icon-button
+                  class="image-download-button"
+                  (click)="onDownloadClick($event, attachment)"
+                  [matTooltip]="'Download ' + attachment.original_filename"
+                >
+                  <mat-icon>download</mat-icon>
+                </button>
+              </div>
+
+              <!-- File attachment - downloadable -->
+              <div
+                *ngIf="!isImageAttachment(attachment)"
+                class="attachment-file"
+              >
+                <a
+                  [href]="attachment.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="file-preview-link"
+                  [matTooltip]="'Open ' + attachment.original_filename"
+                >
+                  <mat-icon class="file-icon">{{ getAttachmentIcon(attachment) }}</mat-icon>
+                  <div class="file-info">
+                    <span class="file-name">{{ attachment.original_filename }}</span>
+                    <span class="file-size">{{ formatFileSize(attachment.file_size) }}</span>
+                  </div>
+                </a>
+                <button
+                  mat-icon-button
+                  class="download-button"
+                  (click)="onDownloadClick($event, attachment)"
+                  [matTooltip]="'Download ' + attachment.original_filename"
+                >
+                  <mat-icon>download</mat-icon>
+                </button>
+              </div>
+            </ng-container>
+          </div>
+
+          <!-- Thread Indicator -->
+          <div
+            class="thread-indicator"
+            *ngIf="message.reply_count > 0"
+            (click)="onOpenThread(message)"
+          >
+            <mat-icon>forum</mat-icon>
+            <span>{{ message.reply_count }} {{ message.reply_count === 1 ? 'reply' : 'replies' }}</span>
+          </div>
+
+          <!-- Message Actions (on hover) -->
+          <div class="message-actions">
+            <button
+              mat-icon-button
+              class="action-button"
+              matTooltip="Reply in thread"
+              (click)="onOpenThread(message)"
+            >
+              <mat-icon>comment</mat-icon>
+            </button>
+          </div>
+
+          <!-- Pending/Error Indicator -->
+          <div class="message-status" *ngIf="message.pending || message.error">
+            <mat-spinner diameter="12" *ngIf="message.pending"></mat-spinner>
+            <mat-icon class="error-icon" *ngIf="message.error">error</mat-icon>
+          </div>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- Empty State -->
+  <div class="empty-state" *ngIf="messages.length === 0 && !isLoading">
+    <mat-icon>chat_bubble_outline</mat-icon>
+    <p>No messages yet. Start the conversation!</p>
+  </div>
+
+  <!-- Initial Loading -->
+  <div class="initial-loading" *ngIf="isLoading && messages.length === 0">
+    <mat-spinner diameter="32"></mat-spinner>
+    <span>Loading messages...</span>
+  </div>
+
+  <!-- Typing Indicator -->
+  <div class="typing-indicator" *ngIf="typingUsers.length > 0">
+    <div class="typing-dots">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <span class="typing-text">{{ getTypingText() }}</span>
+  </div>
+</div>

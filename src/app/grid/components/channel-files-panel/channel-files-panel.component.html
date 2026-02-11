@@ -1,0 +1,100 @@
+<div class="files-panel">
+  <!-- Header -->
+  <div class="files-header">
+    <div class="header-info">
+      <h3>
+        <mat-icon>folder</mat-icon>
+        Files
+      </h3>
+      <span class="channel-name">#{{ channelName }}</span>
+    </div>
+    <button mat-icon-button (click)="onClose()" class="close-button" matTooltip="Close">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Files Content -->
+  <div class="files-content">
+    <!-- Loading State (initial) -->
+    <div class="loading-container" *ngIf="isLoading && files.length === 0">
+      <mat-spinner diameter="32"></mat-spinner>
+      <span>Loading files...</span>
+    </div>
+
+    <!-- Error State -->
+    <div class="error-container" *ngIf="error && !isLoading">
+      <mat-icon>error_outline</mat-icon>
+      <p>{{ error }}</p>
+      <button mat-stroked-button (click)="loadFiles()">Retry</button>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-container" *ngIf="!isLoading && !error && files.length === 0">
+      <mat-icon class="empty-icon">folder_open</mat-icon>
+      <p>No files in this channel yet</p>
+      <span class="empty-hint">Files shared in this channel will appear here</span>
+    </div>
+
+    <!-- Files List -->
+    <div class="files-list" *ngIf="files.length > 0">
+      <div
+        *ngFor="let file of files; trackBy: trackByKey"
+        class="file-item"
+        (click)="openFile(file)"
+        tabindex="0"
+        role="button"
+        [attr.aria-label]="'Open ' + file.filename"
+      >
+        <!-- File Preview/Icon -->
+        <div class="file-preview">
+          <img
+            *ngIf="isImageFile(file.content_type)"
+            [src]="file.url"
+            [alt]="file.filename"
+            class="file-thumbnail"
+            (error)="$any($event.target).style.display='none'"
+          />
+          <mat-icon
+            *ngIf="!isImageFile(file.content_type)"
+            class="file-icon"
+          >{{ getFileIcon(file.content_type) }}</mat-icon>
+          <mat-icon
+            *ngIf="isImageFile(file.content_type)"
+            class="file-icon fallback-icon"
+          >image</mat-icon>
+        </div>
+
+        <!-- File Info -->
+        <div class="file-info">
+          <span class="file-name" [title]="file.filename">{{ file.filename }}</span>
+          <div class="file-meta">
+            <span class="file-size">{{ formatFileSize(file.file_size) }}</span>
+            <span class="file-date">{{ formatDate(file.last_modified) }}</span>
+          </div>
+        </div>
+
+        <!-- Download Button -->
+        <button
+          mat-icon-button
+          class="download-button"
+          (click)="downloadFile(file, $event)"
+          matTooltip="Download"
+        >
+          <mat-icon>download</mat-icon>
+        </button>
+      </div>
+    </div>
+
+    <!-- Load More -->
+    <div class="load-more-container" *ngIf="hasMore && !isLoading">
+      <button mat-stroked-button (click)="loadMore()" class="load-more-button">
+        Load more files
+      </button>
+    </div>
+
+    <!-- Loading More Spinner -->
+    <div class="loading-more" *ngIf="isLoading && files.length > 0">
+      <mat-spinner diameter="24"></mat-spinner>
+    </div>
+  </div>
+</div>

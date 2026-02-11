@@ -15,7 +15,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { GridModule } from '@ocsolar/grid';
+import { GridModule } from './grid/grid.module';
 import { DesktopAuthAdapter } from './services/desktop-auth.adapter';
 import { DesktopUserDataAdapter } from './services/desktop-user-data.adapter';
 

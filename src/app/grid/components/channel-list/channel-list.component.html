@@ -1,0 +1,491 @@
+<div class="channel-list">
+  <!-- Header -->
+  <div class="channel-list-header">
+    <h1>{{ showActivityView ? 'Activity' : 'The Grid' }}</h1>
+    <div class="header-buttons">
+      <!-- Activity / Home Button -->
+      <button
+        mat-icon-button
+        (click)="toggleActivityView(); $event.stopPropagation()"
+        class="activity-button"
+        [matTooltip]="showActivityView ? 'Back to channels' : 'Activity'"
+        matTooltipPosition="right"
+      >
+        <mat-icon>{{ showActivityView ? 'home' : 'notifications' }}</mat-icon>
+        <span
+          class="activity-badge"
+          *ngIf="!showActivityView && unreadActivityCount > 0"
+        >{{ unreadActivityCount > 99 ? '99+' : unreadActivityCount }}</span>
+      </button>
+      <!-- Settings Button -->
+      <button
+        mat-icon-button
+        (click)="toggleSettingsPopup(); $event.stopPropagation()"
+        class="settings-button"
+        matTooltip="Settings"
+        matTooltipPosition="right"
+      >
+        <mat-icon>settings</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Activity View -->
+  <ng-container *ngIf="showActivityView">
+    <!-- Activity Filter Bar -->
+    <div class="activity-filter-bar">
+      <div class="activity-chips">
+        <button
+          class="activity-chip"
+          [class.active]="activityFilter === 'all'"
+          (click)="setActivityFilter('all')"
+        >All</button>
+        <button
+          class="activity-chip"
+          [class.active]="activityFilter === 'unread'"
+          (click)="setActivityFilter('unread')"
+        >Unread</button>
+      </div>
+      <button
+        class="activity-mark-read-btn"
+        (click)="markAllActivityRead()"
+        *ngIf="unreadActivityCount > 0"
+      >
+        <mat-icon>done_all</mat-icon>
+        <span>Mark all read</span>
+      </button>
+    </div>
+
+    <!-- Activity Loading -->
+    <div class="loading-state" *ngIf="isLoadingActivity">
+      <mat-spinner diameter="24"></mat-spinner>
+      <span>Loading activity...</span>
+    </div>
+
+    <!-- Activity List -->
+    <div class="activity-list" *ngIf="!isLoadingActivity">
+      <div
+        *ngFor="let item of activityItems"
+        class="activity-item"
+        [class.unread]="!item.is_read"
+        (click)="onActivityItemClick(item)"
+      >
+        <div class="activity-channel-header">
+          <mat-icon class="activity-channel-icon">{{ getActivityChannelIcon(item) }}</mat-icon>
+          <span class="activity-channel-name">{{ item.channel_name || (item.channel_type === 'dm' || item.channel_type === 'direct' ? 'Direct Message' : 'Unknown Channel') }}</span>
+          <span class="activity-time">{{ formatLastMessageTime(item.created_at) }}</span>
+        </div>
+        <div class="activity-message-row">
+          <div class="activity-sender-avatar">
+            <img
+              *ngIf="getActivitySenderAvatar(item)"
+              [src]="getActivitySenderAvatar(item)"
+              [alt]="getActivitySenderName(item)"
+              class="activity-sender-avatar-img"
+            />
+            <span *ngIf="!getActivitySenderAvatar(item)">{{ getActivitySenderInitials(item) }}</span>
+          </div>
+          <div class="activity-message-content">
+            <span class="activity-sender-name">{{ getActivitySenderName(item) }}</span>
+            <span class="activity-message-preview">{{ formatActivityMessage(item.message_content) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div class="activity-empty" *ngIf="activityItems.length === 0">
+        <mat-icon>notifications_none</mat-icon>
+        <span>No activity yet</span>
+        <span class="activity-empty-sub">Mentions and notifications will appear here</span>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- Settings Popup (available in both views) -->
+  <div class="settings-popup" *ngIf="showSettingsPopup" (click)="$event.stopPropagation()">
+    <div class="settings-popup-header">
+      <span>Settings</span>
+    </div>
+    <div class="settings-popup-content">
+      <div class="settings-section">
+        <span class="settings-section-title">Theme</span>
+        <div class="theme-dropdown" (click)="showThemeDropdown = !showThemeDropdown; $event.stopPropagation()">
+          <div class="theme-dropdown-trigger">
+            <div class="theme-color" [style.background]="currentThemeConfig?.colors?.primary"></div>
+            <div class="theme-color" [style.background]="currentThemeConfig?.colors?.secondary"></div>
+            <span class="theme-dropdown-label">{{ currentThemeConfig?.label }}</span>
+            <mat-icon class="theme-dropdown-arrow">{{ showThemeDropdown ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </div>
+          <div class="theme-dropdown-list" *ngIf="showThemeDropdown">
+            <div
+              *ngFor="let theme of themeOptions"
+              class="theme-dropdown-item"
+              [class.selected]="currentTheme === theme.name"
+              (click)="selectTheme(theme.name); showThemeDropdown = false; $event.stopPropagation()"
+            >
+              <div class="theme-color" [style.background]="theme.colors.primary"></div>
+              <div class="theme-color" [style.background]="theme.colors.secondary"></div>
+              <span>{{ theme.label }}</span>
+              <mat-icon class="theme-check" *ngIf="currentTheme === theme.name">check</mat-icon>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <span class="settings-section-title">Notifications</span>
+        <div class="notification-toggle" (click)="toggleNotifications()">
+          <mat-icon>{{ notificationsEnabled ? 'notifications_active' : 'notifications_off' }}</mat-icon>
+          <span>Desktop Notifications</span>
+          <div class="toggle-switch" [class.active]="notificationsEnabled">
+            <div class="toggle-knob"></div>
+          </div>
+        </div>
+        <div class="notification-type-options" *ngIf="notificationsEnabled">
+          <div class="notification-type-option" (click)="toggleNotificationType('dm')">
+            <mat-icon>person</mat-icon>
+            <span>Direct Messages</span>
+            <div class="type-checkbox" [class.checked]="notificationPreferences.dm">
+              <mat-icon *ngIf="notificationPreferences.dm">check</mat-icon>
+            </div>
+          </div>
+          <div class="notification-type-option" (click)="toggleNotificationType('channel')">
+            <mat-icon>tag</mat-icon>
+            <span>Channel Messages</span>
+            <div class="type-checkbox" [class.checked]="notificationPreferences.channel">
+              <mat-icon *ngIf="notificationPreferences.channel">check</mat-icon>
+            </div>
+          </div>
+          <div class="notification-type-option" (click)="toggleNotificationType('mention')">
+            <mat-icon>alternate_email</mat-icon>
+            <span>Mentions</span>
+            <div class="type-checkbox" [class.checked]="notificationPreferences.mention">
+              <mat-icon *ngIf="notificationPreferences.mention">check</mat-icon>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Popup Backdrop -->
+  <div class="settings-popup-backdrop" *ngIf="showSettingsPopup" (click)="toggleSettingsPopup()"></div>
+
+  <!-- Normal Channel List View -->
+  <ng-container *ngIf="!showActivityView">
+    <!-- Search -->
+    <div class="search-container">
+      <mat-icon>search</mat-icon>
+      <input
+        type="text"
+        placeholder="Search channels"
+        [ngModel]="searchQuery"
+        (ngModelChange)="onSearchChange($event)"
+        class="search-input"
+      />
+      <mat-spinner *ngIf="isSearching" diameter="16" class="search-spinner"></mat-spinner>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading-state" *ngIf="isLoading">
+      <mat-spinner diameter="24"></mat-spinner>
+      <span>Loading channels...</span>
+    </div>
+
+    <!-- Channels Section -->
+    <div class="section" *ngIf="!isLoading">
+      <div class="section-header" (click)="isChannelsCollapsed = !isChannelsCollapsed">
+        <mat-icon>{{ isChannelsCollapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+        <span>Channels</span>
+        <div class="section-header-actions">
+          <button
+            class="filter-btn"
+            (click)="toggleFilterPopup(); $event.stopPropagation()"
+            [class.active]="messageFilter !== 'all'"
+            matTooltip="Filter messages"
+          >
+            <mat-icon>tune</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <!-- Filter Popup -->
+      <div class="filter-popup" *ngIf="showFilterPopup" (click)="$event.stopPropagation()">
+        <div class="filter-popup-header">
+          <span>Sort & Filter</span>
+        </div>
+        <div class="filter-popup-options">
+          <div
+            class="filter-option"
+            [class.selected]="messageFilter === 'all'"
+            (click)="setMessageFilter('all')"
+          >
+            <mat-icon>inbox</mat-icon>
+            <span>All Messages</span>
+            <mat-icon class="check-icon" *ngIf="messageFilter === 'all'">check</mat-icon>
+          </div>
+          <div
+            class="filter-option"
+            [class.selected]="messageFilter === 'unread'"
+            (click)="setMessageFilter('unread')"
+          >
+            <mat-icon>mark_email_unread</mat-icon>
+            <span>Unread Only</span>
+            <mat-icon class="check-icon" *ngIf="messageFilter === 'unread'">check</mat-icon>
+          </div>
+          <div
+            class="filter-option"
+            [class.selected]="messageFilter === 'mentions'"
+            (click)="setMessageFilter('mentions')"
+          >
+            <mat-icon>alternate_email</mat-icon>
+            <span>Mentions Only</span>
+            <mat-icon class="check-icon" *ngIf="messageFilter === 'mentions'">check</mat-icon>
+          </div>
+          <div class="filter-divider"></div>
+          <div
+            class="filter-option action-option"
+            (click)="markAllAsRead()"
+          >
+            <mat-icon>done_all</mat-icon>
+            <span>Mark all as read</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Popup Backdrop -->
+      <div class="filter-popup-backdrop" *ngIf="showFilterPopup" (click)="toggleFilterPopup()"></div>
+      <ul class="channel-items" *ngIf="!isChannelsCollapsed">
+        <li
+          *ngFor="let channel of publicChannels"
+          class="channel-item"
+          [class.selected]="isSelected(channel)"
+          [class.unread]="channel.unread_count && channel.unread_count > 0"
+          [class.has-mention]="channel.has_mention"
+          (click)="selectChannel(channel)"
+        >
+          <mat-icon class="channel-icon">{{ getChannelIcon(channel) }}</mat-icon>
+          <span class="channel-name">{{ channel.name }}</span>
+          <span class="mention-badge" *ngIf="channel.has_mention">@</span>
+        </li>
+        <li class="empty-state" *ngIf="publicChannels.length === 0 && !searchQuery">
+          <span>No channels yet</span>
+        </li>
+        <li class="empty-state" *ngIf="publicChannels.length === 0 && searchQuery">
+          <span>No channels match your search</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Groups Section -->
+    <div class="section" *ngIf="!isLoading">
+      <div class="section-header" (click)="isGroupsCollapsed = !isGroupsCollapsed">
+        <mat-icon>{{ isGroupsCollapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+        <span>Groups</span>
+        <div class="section-header-actions">
+          <div class="action-btn-container">
+            <button
+              class="action-btn"
+              (click)="toggleGroupForm(); $event.stopPropagation()"
+              matTooltip="Create Group"
+            >
+              <mat-icon>add</mat-icon>
+            </button>
+            <!-- Group Popup -->
+            <div class="group-popup" *ngIf="showGroupForm" (click)="$event.stopPropagation()">
+              <div class="group-popup-header">
+                <span>Create a Group</span>
+              </div>
+              <div class="group-popup-name">
+                <input
+                  type="text"
+                  placeholder="Group name (optional)"
+                  [(ngModel)]="newGroupName"
+                  class="group-name-input"
+                />
+              </div>
+              <div class="group-popup-search">
+                <mat-icon>search</mat-icon>
+                <input
+                  type="text"
+                  placeholder="Search employees..."
+                  [(ngModel)]="groupSearchQuery"
+                  class="group-search-input"
+                />
+              </div>
+              <div class="group-popup-list">
+                <div
+                  *ngFor="let user of filteredUsersForGroup"
+                  class="group-user-item"
+                  (click)="toggleUserForGroup(user)"
+                  [class.selected]="isUserSelectedForGroup(user)"
+                >
+                  <div class="group-user-avatar" [style.background]="user.avatarColor || '#1d1c1d'">
+                    <img *ngIf="user.profileImage" [src]="user.profileImage" [alt]="getUserDisplayName(user)" class="group-user-avatar-img" />
+                    <span *ngIf="!user.profileImage">{{ getUserInitials(user) }}</span>
+                  </div>
+                  <div class="group-user-info">
+                    <span class="group-user-name">{{ getUserDisplayName(user) }}</span>
+                    <span class="group-user-role">{{ user.sRole }}</span>
+                  </div>
+                  <mat-icon class="group-user-check" *ngIf="isUserSelectedForGroup(user)">check_circle</mat-icon>
+                </div>
+                <div class="group-list-empty" *ngIf="filteredUsersForGroup.length === 0 && groupSearchQuery">
+                  <span>No employees found</span>
+                </div>
+                <div class="group-list-empty" *ngIf="filteredUsersForGroup.length === 0 && !groupSearchQuery && users.length === 0">
+                  <mat-spinner diameter="16"></mat-spinner>
+                  <span>Loading employees...</span>
+                </div>
+              </div>
+              <div class="group-popup-footer">
+                <span class="selected-count">{{ selectedGroupMembers.length }} selected</span>
+                <button
+                  class="create-group-btn"
+                  [disabled]="selectedGroupMembers.length < 1 || isCreatingGroup"
+                  (click)="createGroup()"
+                >
+                  <mat-spinner *ngIf="isCreatingGroup" diameter="16"></mat-spinner>
+                  <span *ngIf="!isCreatingGroup">Create Group</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="channel-items" *ngIf="!isGroupsCollapsed">
+        <li
+          *ngFor="let group of groupChats"
+          class="channel-item"
+          [class.selected]="isSelected(group)"
+          [class.unread]="group.unread_count && group.unread_count > 0"
+          [class.has-mention]="group.has_mention"
+          (click)="selectChannel(group)"
+        >
+          <mat-icon class="channel-icon">group</mat-icon>
+          <span class="channel-name">{{ getChannelDisplayName(group) }}</span>
+          <span class="mention-badge" *ngIf="group.has_mention">@</span>
+        </li>
+        <li class="empty-state" *ngIf="groupChats.length === 0 && !searchQuery">
+          <span>No groups yet</span>
+        </li>
+        <li class="empty-state" *ngIf="groupChats.length === 0 && searchQuery">
+          <span>No groups match your search</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Direct Messages Section -->
+    <div class="section" *ngIf="!isLoading">
+      <div class="section-header" (click)="isDmsCollapsed = !isDmsCollapsed">
+        <mat-icon>{{ isDmsCollapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+        <span>Direct Messages</span>
+        <div class="section-header-actions">
+          <div class="action-btn-container">
+            <button
+              class="action-btn"
+              (click)="toggleDmForm(); $event.stopPropagation()"
+              matTooltip="Send Direct Message"
+            >
+              <mat-icon>add</mat-icon>
+            </button>
+            <!-- DM Popup -->
+            <div class="dm-popup" *ngIf="showDmForm" (click)="$event.stopPropagation()">
+              <div class="dm-popup-header">
+                <span>Send a Direct Message</span>
+              </div>
+              <div class="dm-popup-search">
+                <mat-icon>search</mat-icon>
+                <input
+                  type="text"
+                  placeholder="Search employees..."
+                  [(ngModel)]="dmSearchQuery"
+                  class="dm-search-input"
+                  #dmSearchInput
+                />
+              </div>
+              <div class="dm-popup-list">
+                <div
+                  *ngFor="let user of filteredUsers"
+                  class="dm-user-item"
+                  (click)="selectUserForDm(user)"
+                  [class.disabled]="isCreatingDm"
+                >
+                  <div class="dm-user-avatar" [style.background]="user.avatarColor || '#1d1c1d'">
+                    <img *ngIf="user.profileImage" [src]="user.profileImage" [alt]="getUserDisplayName(user)" class="dm-user-avatar-img" />
+                    <span *ngIf="!user.profileImage">{{ getUserInitials(user) }}</span>
+                  </div>
+                  <div class="dm-user-info">
+                    <span class="dm-user-name">{{ getUserDisplayName(user) }}</span>
+                    <span class="dm-user-role">{{ user.sRole }}</span>
+                  </div>
+                </div>
+                <div class="dm-list-empty" *ngIf="filteredUsers.length === 0 && dmSearchQuery">
+                  <span>No employees found</span>
+                </div>
+                <div class="dm-list-empty" *ngIf="filteredUsers.length === 0 && !dmSearchQuery && users.length === 0">
+                  <mat-spinner diameter="16"></mat-spinner>
+                  <span>Loading employees...</span>
+                </div>
+              </div>
+              <div class="dm-popup-loading" *ngIf="isCreatingDm">
+                <mat-spinner diameter="18"></mat-spinner>
+                <span>Opening conversation...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="channel-items" *ngIf="!isDmsCollapsed">
+        <li
+          *ngFor="let dm of directMessages"
+          class="channel-item dm-item"
+          [class.selected]="isSelected(dm)"
+          [class.unread]="dm.unread_count && dm.unread_count > 0"
+          (click)="selectChannel(dm)"
+        >
+          <div class="dm-avatar">
+            <span>{{ dm.dm_user?.display_name?.charAt(0) || 'U' }}</span>
+            <span class="online-indicator" *ngIf="dm.dm_user?.is_online"></span>
+          </div>
+          <div class="dm-info">
+            <span class="dm-name">{{ getChannelDisplayName(dm) }}</span>
+            <span class="dm-preview" *ngIf="dm.last_message_preview">
+              {{ dm.last_message_preview }}
+            </span>
+          </div>
+          <div class="dm-meta">
+            <span class="dm-time" *ngIf="dm.last_message_at">
+              {{ formatLastMessageTime(dm.last_message_at) }}
+            </span>
+            <span class="unread-badge" *ngIf="dm.unread_count && dm.unread_count > 0">
+              {{ dm.unread_count > 99 ? '99+' : dm.unread_count }}
+            </span>
+          </div>
+        </li>
+        <li class="empty-state" *ngIf="directMessages.length === 0 && !searchQuery">
+          <span>No direct messages yet</span>
+        </li>
+        <li class="empty-state" *ngIf="directMessages.length === 0 && searchQuery">
+          <span>No DMs match your search</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Popup Backdrops -->
+    <div class="dm-popup-backdrop" *ngIf="showDmForm" (click)="toggleDmForm()"></div>
+    <div class="group-popup-backdrop" *ngIf="showGroupForm" (click)="toggleGroupForm()"></div>
+  </ng-container>
+
+  <!-- Nexus Menu Toggle -->
+  <div class="nexus-toggle" *ngIf="showNexusToggle">
+    <button
+      mat-icon-button
+      class="nexus-toggle-btn"
+      (click)="toggleNexusMenu()"
+      [matTooltip]="isNexusMenuOpen ? 'Hide Nexus menu' : 'Show Nexus menu'"
+      matTooltipPosition="right"
+    >
+      <mat-icon>{{ isNexusMenuOpen ? 'chevron_left' : 'chevron_right' }}</mat-icon>
+    </button>
+  </div>
+</div>

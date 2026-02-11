@@ -6,7 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { GridComponent } from '@ocsolar/grid';
+import { GridComponent } from '../../grid/components/grid/grid.component';
 
 @Component({
   selector: 'app-grid-shell',

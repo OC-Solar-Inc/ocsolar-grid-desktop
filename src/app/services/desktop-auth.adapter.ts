@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { AngularFireAuth } from '@angular/fire/compat/auth';
-import { GridAuthProvider } from '@ocsolar/grid';
+import { GridAuthProvider } from '../grid/tokens/grid-tokens';
 
 @Injectable({ providedIn: 'root' })
 export class DesktopAuthAdapter implements GridAuthProvider {

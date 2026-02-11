@@ -1,0 +1,318 @@
+// Channel Files Panel Styles
+// Uses CSS custom properties from parent for theming
+
+$text-primary: #1d1c1d;
+$text-secondary: #616061;
+$border-color: #e0e0e0;
+$accent-color: #1264a3;
+
+// Host element must fill parent and constrain height
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.files-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; // Critical for nested flex scrolling
+  background: var(--grid-chat-bg, white);
+  overflow: hidden;
+}
+
+// Header
+.files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--grid-chat-border, $border-color);
+  min-height: 56px;
+  background: var(--grid-chat-bg, white);
+
+  .header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--grid-chat-text, $text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+        color: var(--grid-chat-accent, $accent-color);
+      }
+    }
+
+    .channel-name {
+      font-size: 12px;
+      color: var(--grid-chat-text-muted, $text-secondary);
+      margin-left: 28px;
+    }
+  }
+
+  .close-button {
+    color: var(--grid-chat-text-muted, $text-secondary);
+
+    &:hover {
+      color: var(--grid-chat-text, $text-primary);
+      background: var(--grid-chat-hover, rgba(0, 0, 0, 0.05));
+    }
+  }
+}
+
+// Content Area
+.files-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  min-height: 0; // Critical for flex child scrolling
+}
+
+// Loading State
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 16px;
+
+  span {
+    color: var(--grid-chat-text-muted, $text-secondary);
+    font-size: 14px;
+  }
+}
+
+// Error State
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 12px;
+  text-align: center;
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    color: #d32f2f;
+  }
+
+  p {
+    margin: 0;
+    color: var(--grid-chat-text, $text-primary);
+    font-size: 14px;
+  }
+
+  button {
+    margin-top: 8px;
+  }
+}
+
+// Empty State
+.empty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+
+  .empty-icon {
+    font-size: 64px;
+    width: 64px;
+    height: 64px;
+    color: var(--grid-chat-border, $border-color);
+    margin-bottom: 16px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--grid-chat-text, $text-primary);
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .empty-hint {
+    color: var(--grid-chat-text-muted, $text-secondary);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+}
+
+// Files List
+.files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--grid-chat-bg, white);
+  border: 1px solid var(--grid-chat-border, $border-color);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: var(--grid-chat-hover, #f8f8f8);
+    border-color: var(--grid-chat-accent, $accent-color);
+
+    .download-button {
+      opacity: 1;
+    }
+  }
+
+  &:focus {
+    outline: 2px solid var(--grid-chat-accent, $accent-color);
+    outline-offset: 2px;
+  }
+}
+
+// File Preview/Icon
+.file-preview {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  background: var(--grid-chat-hover, #f5f5f5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+
+  .file-thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: relative;
+    z-index: 1;
+  }
+
+  .file-icon {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+    color: var(--grid-chat-accent, $accent-color);
+  }
+
+  .fallback-icon {
+    position: absolute;
+    z-index: 0;
+  }
+}
+
+// File Info
+.file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  .file-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--grid-chat-text, $text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--grid-chat-text-muted, $text-secondary);
+
+    .file-size {
+      &::after {
+        content: '\2022';
+        margin-left: 8px;
+      }
+    }
+  }
+}
+
+// Download Button
+.download-button {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: var(--grid-chat-accent, $accent-color);
+
+  &:hover {
+    background: rgba(18, 100, 163, 0.1);
+  }
+}
+
+// Load More
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+
+  .load-more-button {
+    color: var(--grid-chat-accent, $accent-color);
+    border-color: var(--grid-chat-border, $border-color);
+
+    &:hover {
+      background: var(--grid-chat-hover, #f8f8f8);
+    }
+  }
+}
+
+// Loading More Spinner
+.loading-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .files-content {
+    padding: 12px;
+  }
+
+  .file-item {
+    padding: 10px;
+  }
+
+  .file-preview {
+    width: 40px;
+    height: 40px;
+
+    .file-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  .download-button {
+    opacity: 1;
+  }
+}

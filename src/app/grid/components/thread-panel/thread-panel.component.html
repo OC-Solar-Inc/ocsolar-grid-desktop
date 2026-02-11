@@ -1,0 +1,141 @@
+<div class="thread-panel" *ngIf="parentMessage">
+  <!-- Header -->
+  <div class="thread-header">
+    <div class="header-info">
+      <h3>Thread</h3>
+      <span class="channel-name">#{{ channelName }}</span>
+    </div>
+    <button mat-icon-button (click)="onClose()" class="close-button">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Thread Content -->
+  <div class="thread-content">
+    <!-- Parent Message -->
+    <div class="parent-message">
+      <div class="message-avatar">
+        <div class="avatar" *ngIf="!getAvatarUrl(parentMessage)" [style.background]="getAvatarColor(parentMessage)">
+          {{ getInitials(getDisplayName(parentMessage)) }}
+        </div>
+        <img
+          *ngIf="getAvatarUrl(parentMessage)"
+          [src]="getAvatarUrl(parentMessage)"
+          [alt]="getDisplayName(parentMessage)"
+          class="avatar-image"
+          (error)="$any($event.target).style.display='none'"
+        />
+        <!-- Fallback initials shown if image fails to load -->
+        <div class="avatar avatar-fallback" *ngIf="getAvatarUrl(parentMessage)" [style.background]="getAvatarColor(parentMessage)">
+          {{ getInitials(getDisplayName(parentMessage)) }}
+        </div>
+      </div>
+      <div class="message-body">
+        <div class="message-header">
+          <span class="sender-name">{{ getDisplayName(parentMessage) }}</span>
+          <span class="message-time">{{ formatDate(parentMessage.created_at) }}</span>
+        </div>
+        <div class="message-text" [innerHTML]="formatMessageContent(parentMessage.content)"></div>
+        <div class="reply-count" *ngIf="replies.length > 0">
+          {{ replies.length }} {{ replies.length === 1 ? 'reply' : 'replies' }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="thread-divider" *ngIf="replies.length > 0">
+      <span>{{ replies.length }} {{ replies.length === 1 ? 'reply' : 'replies' }}</span>
+    </div>
+
+    <!-- Replies -->
+    <div class="replies-list">
+      <div
+        *ngFor="let reply of replies; trackBy: trackByReplyId"
+        class="reply-message"
+      >
+        <div class="message-avatar">
+          <div class="avatar" *ngIf="!getAvatarUrl(reply)" [style.background]="getAvatarColor(reply)">
+            {{ getInitials(getDisplayName(reply)) }}
+          </div>
+          <img
+            *ngIf="getAvatarUrl(reply)"
+            [src]="getAvatarUrl(reply)"
+            [alt]="getDisplayName(reply)"
+            class="avatar-image"
+            (error)="$any($event.target).style.display='none'"
+          />
+          <!-- Fallback initials shown if image fails to load -->
+          <div class="avatar avatar-fallback" *ngIf="getAvatarUrl(reply)" [style.background]="getAvatarColor(reply)">
+            {{ getInitials(getDisplayName(reply)) }}
+          </div>
+        </div>
+        <div class="message-body">
+          <div class="message-header">
+            <span class="sender-name">{{ getDisplayName(reply) }}</span>
+            <span class="message-time">{{ formatTime(reply.created_at) }}</span>
+          </div>
+          <div class="message-text">
+            <span [innerHTML]="formatMessageContent(reply.content)"></span>
+            <span class="edited-indicator" *ngIf="reply.is_edited">(edited)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-replies" *ngIf="replies.length === 0">
+        <p>No replies yet. Start the conversation!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reply Input -->
+  <div class="reply-input-container">
+    <div class="input-wrapper">
+      <div class="textarea-wrapper">
+        <textarea
+          #replyInput
+          [(ngModel)]="replyContent"
+          placeholder="Reply..."
+          (input)="onInput()"
+          (keydown)="onKeyDown($event)"
+          rows="1"
+          class="reply-textarea"
+        ></textarea>
+
+        <!-- Mention autocomplete dropdown -->
+        <div class="mention-dropdown" *ngIf="showMentionDropdown && mentionSuggestions.length > 0">
+          <div class="mention-header">
+            People matching "{{ mentionQuery || '@' }}"
+          </div>
+          <div
+            *ngFor="let user of mentionSuggestions; let i = index"
+            class="mention-item"
+            [class.selected]="i === selectedMentionIndex"
+            (click)="selectMention(user)"
+            (mouseenter)="selectedMentionIndex = i"
+          >
+            <div class="mention-avatar" *ngIf="user.avatar_url">
+              <img [src]="user.avatar_url" [alt]="user.display_name" />
+            </div>
+            <div class="mention-avatar mention-initials" *ngIf="!user.avatar_url">
+              {{ getUserInitials(user) }}
+            </div>
+            <div class="mention-info">
+              <span class="mention-name">{{ user.display_name }}</span>
+              <span class="mention-username">@{{ user.username }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button
+        mat-icon-button
+        class="send-button"
+        [disabled]="!replyContent.trim()"
+        (click)="sendReply()"
+        matTooltip="Send reply"
+      >
+        <mat-icon>send</mat-icon>
+      </button>
+    </div>
+  </div>
+</div>

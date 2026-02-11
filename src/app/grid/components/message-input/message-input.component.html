@@ -1,0 +1,289 @@
+<div class="message-input-container" [class.disabled]="disabled">
+  <!-- Hidden file input -->
+  <input
+    #fileInput
+    type="file"
+    [accept]="acceptedFileTypes"
+    (change)="onFileSelected($event)"
+    multiple
+    hidden
+  />
+
+  <!-- Attachments preview area -->
+  <div class="attachments-preview" *ngIf="completedAttachments.length > 0 || pendingUploads.length > 0">
+    <!-- Completed attachments -->
+    <div
+      class="attachment-item completed"
+      *ngFor="let attachment of completedAttachments"
+    >
+      <div class="attachment-thumbnail" *ngIf="isImageAttachment(attachment)">
+        <img [src]="attachment.url" [alt]="attachment.original_filename" />
+      </div>
+      <mat-icon class="attachment-icon" *ngIf="!isImageAttachment(attachment)">
+        {{ getFileIcon(attachment.file_type) }}
+      </mat-icon>
+      <span class="attachment-name">{{ attachment.original_filename }}</span>
+      <button
+        mat-icon-button
+        class="remove-button"
+        (click)="removeAttachment(attachment)"
+        matTooltip="Remove"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+
+    <!-- Pending uploads -->
+    <div
+      class="attachment-item"
+      *ngFor="let upload of pendingUploads"
+      [class.uploading]="upload.status === 'uploading' || upload.status === 'pending'"
+      [class.error]="upload.status === 'error'"
+    >
+      <mat-spinner
+        *ngIf="upload.status === 'uploading' || upload.status === 'pending'"
+        diameter="20"
+      ></mat-spinner>
+      <mat-icon *ngIf="upload.status === 'error'" class="error-icon">error</mat-icon>
+      <span class="attachment-name">{{ upload.file.name }}</span>
+      <span class="upload-error" *ngIf="upload.status === 'error'">
+        {{ upload.error }}
+      </span>
+      <button
+        mat-icon-button
+        class="remove-button"
+        (click)="removePendingUpload(upload)"
+        matTooltip="Remove"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mentions preview - shows who is being mentioned -->
+  <div class="mentions-preview" *ngIf="currentMentions.length > 0">
+    <span class="mentions-label">Mentioning:</span>
+    <div class="mention-chips">
+      <div class="mention-chip" *ngFor="let mention of currentMentions">
+        <span class="mention-chip-name">@{{ mention.displayName }}</span>
+        <span
+          class="mention-chip-remove"
+          (click)="removeMention(mention.displayName)"
+          title="Remove mention"
+        >
+          <mat-icon>close</mat-icon>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-wrapper">
+    <!-- Attach button -->
+    <button
+      mat-icon-button
+      class="attach-button"
+      [disabled]="disabled"
+      (click)="triggerFileInput()"
+      matTooltip="Attach file"
+    >
+      <mat-icon>attach_file</mat-icon>
+    </button>
+
+    <!-- Emoji button wrapper -->
+    <div class="emoji-button-wrapper">
+      <button
+        mat-icon-button
+        class="emoji-button"
+        [disabled]="disabled"
+        (click)="toggleEmojiPicker()"
+        matTooltip="Add emoji"
+      >
+        <mat-icon>insert_emoticon</mat-icon>
+      </button>
+
+      <!-- Emoji Picker Dropdown -->
+      <div class="emoji-picker" *ngIf="showEmojiPicker">
+        <div class="emoji-picker-header">
+          <span class="emoji-picker-title">Emojis</span>
+          <button
+            mat-icon-button
+            class="emoji-picker-close"
+            (click)="closeEmojiPicker()"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+
+        <div class="emoji-category-tabs">
+          <button
+            *ngFor="let category of emojiCategories; let i = index"
+            class="emoji-category-tab"
+            [class.active]="i === selectedEmojiCategoryIndex"
+            (click)="selectEmojiCategory(i)"
+            [matTooltip]="category.name"
+          >
+            {{ category.icon }}
+          </button>
+        </div>
+
+        <div class="emoji-category-content">
+          <div class="emoji-category-name">
+            {{ emojiCategories[selectedEmojiCategoryIndex].name }}
+          </div>
+          <div class="emoji-grid">
+            <button
+              *ngFor="let emoji of emojiCategories[selectedEmojiCategoryIndex].emojis"
+              class="emoji-item"
+              (click)="selectEmoji(emoji)"
+            >
+              {{ emoji }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GIF button wrapper -->
+    <div class="gif-button-wrapper">
+      <button
+        mat-icon-button
+        class="gif-button"
+        [disabled]="disabled"
+        (click)="toggleGifPicker()"
+        matTooltip="Add GIF"
+      >
+        <mat-icon>gif_box</mat-icon>
+      </button>
+
+      <!-- GIF Picker Dropdown -->
+      <div class="gif-picker" *ngIf="showGifPicker">
+        <div class="gif-picker-header">
+          <span class="gif-picker-title">GIFs</span>
+          <button
+            mat-icon-button
+            class="gif-picker-close"
+            (click)="closeGifPicker()"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+
+        <div class="gif-search">
+          <mat-icon class="gif-search-icon">search</mat-icon>
+          <input
+            type="text"
+            class="gif-search-input"
+            placeholder="Search GIPHY"
+            [(ngModel)]="gifSearchQuery"
+            (input)="onGifSearchInput()"
+            (keydown.escape)="closeGifPicker()"
+          />
+          <button
+            *ngIf="gifSearchQuery"
+            mat-icon-button
+            class="gif-search-clear"
+            (click)="gifSearchQuery = ''; gifResults = []"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+
+        <div class="gif-content">
+          <div class="gif-not-configured" *ngIf="!isGifEnabled">
+            <mat-icon>settings</mat-icon>
+            <span>GIPHY API key not configured</span>
+            <small>Add giphyApiKey to environment.ts</small>
+          </div>
+
+          <div class="gif-loading" *ngIf="isGifEnabled && isLoadingGifs">
+            <mat-spinner diameter="32"></mat-spinner>
+          </div>
+
+          <div class="gif-error" *ngIf="isGifEnabled && gifSearchError && !isLoadingGifs">
+            <mat-icon>error_outline</mat-icon>
+            <span>Failed to load GIFs</span>
+          </div>
+
+          <div class="gif-empty" *ngIf="isGifEnabled && !isLoadingGifs && !gifSearchError && displayedGifs.length === 0 && gifSearchQuery">
+            <mat-icon>sentiment_dissatisfied</mat-icon>
+            <span>No GIFs found</span>
+          </div>
+
+          <div class="gif-grid" *ngIf="isGifEnabled && !isLoadingGifs && displayedGifs.length > 0">
+            <div
+              class="gif-item"
+              *ngFor="let gif of displayedGifs"
+              (click)="selectGif(gif)"
+              [title]="gif.title"
+            >
+              <img [src]="gif.previewUrl" [alt]="gif.title" loading="lazy" />
+            </div>
+          </div>
+        </div>
+
+        <div class="giphy-attribution">
+          <img src="assets/images/giphy-attribution.svg" alt="Powered by GIPHY" />
+        </div>
+      </div>
+    </div>
+
+    <div class="textarea-wrapper">
+      <textarea
+        #textarea
+        [(ngModel)]="messageContent"
+        [placeholder]="inputPlaceholder"
+        [disabled]="disabled"
+        (input)="onInput()"
+        (keydown)="onKeyDown($event)"
+        rows="1"
+        class="message-textarea"
+      ></textarea>
+
+      <!-- Mention autocomplete dropdown -->
+      <div class="mention-dropdown" *ngIf="showMentionDropdown && mentionSuggestions.length > 0">
+        <div class="mention-header">
+          People matching "{{ mentionQuery || '@' }}"
+        </div>
+        <div
+          *ngFor="let user of mentionSuggestions; let i = index"
+          class="mention-item"
+          [class.selected]="i === selectedMentionIndex"
+          (click)="selectMention(user)"
+          (mouseenter)="selectedMentionIndex = i"
+        >
+          <div class="mention-avatar" *ngIf="user.avatar_url">
+            <img [src]="user.avatar_url" [alt]="user.display_name" />
+          </div>
+          <div class="mention-avatar mention-initials" *ngIf="!user.avatar_url">
+            {{ getUserInitials(user) }}
+          </div>
+          <div class="mention-info">
+            <span class="mention-name">{{ user.display_name }}</span>
+            <span class="mention-username">@{{ user.username }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-actions">
+      <button
+        mat-icon-button
+        class="send-button"
+        [disabled]="!canSend"
+        (click)="sendMessage()"
+        matTooltip="Send message"
+      >
+        <mat-icon>send</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <div class="input-hint" *ngIf="!disabled">
+    <span><strong>Enter</strong> to send, <strong>Shift + Enter</strong> for new line</span>
+  </div>
+
+  <div class="disconnected-hint" *ngIf="disabled">
+    <mat-icon>wifi_off</mat-icon>
+    <span>Reconnecting to chat...</span>
+  </div>
+</div>
