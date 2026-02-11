@@ -1,0 +1,41 @@
+<div class="login-container">
+  <div class="login-content">
+    <div class="login-branding">
+      <img src="assets/images/Grid_White.png" alt="Grid" class="logo">
+      <span class="app-name">Grid</span>
+      <img src="assets/images/oc-solar-horizontal-logo.webp" alt="OC Solar" class="sub-logo">
+    </div>
+
+    <div class="login-card">
+      <h2>Sign in</h2>
+
+      <form (ngSubmit)="login()" class="login-form">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" [(ngModel)]="email" name="email"
+                 placeholder="you@ocsolar.com" autocomplete="email">
+          <mat-icon matPrefix>email</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Password</mat-label>
+          <input matInput type="password" [(ngModel)]="password" name="password"
+                 placeholder="Enter your password" autocomplete="current-password"
+                 (keyup.enter)="login()">
+          <mat-icon matPrefix>lock</mat-icon>
+        </mat-form-field>
+
+        <div class="error-message" *ngIf="errorMessage">
+          <mat-icon>error</mat-icon>
+          <span>{{ errorMessage }}</span>
+        </div>
+
+        <button mat-raised-button type="submit"
+                class="login-button" [disabled]="isLoading">
+          <mat-spinner *ngIf="isLoading" diameter="20"></mat-spinner>
+          <span *ngIf="!isLoading">Sign In</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
