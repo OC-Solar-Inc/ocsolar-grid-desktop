@@ -35,6 +35,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   @Input() currentChannel: GridChannel | null = null;
   @Input() isLoading = false;
   @Input() users: User[] = [];
+  @Input() presenceMap: Map<string, boolean> = new Map();
 
   @Output() channelSelected = new EventEmitter<GridChannel>();
   @Output() channelCreated = new EventEmitter<GridChannel>();
@@ -210,7 +211,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
       return bTime - aTime;
     });
 
-    return sorted.slice(0, this.MAX_DISPLAY);
+    return sorted;
   }
 
   get directMessages(): GridChannel[] {
@@ -234,8 +235,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
       return bTime - aTime;
     });
 
-    // Show all when searching, otherwise limit to MAX_DISPLAY
-    return this.searchQuery ? sorted : sorted.slice(0, this.MAX_DISPLAY);
+    return sorted;
   }
 
   get groupChats(): GridChannel[] {
@@ -265,7 +265,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
       return bTime - aTime;
     });
 
-    return this.searchQuery ? sorted : sorted.slice(0, this.MAX_DISPLAY);
+    return sorted;
   }
 
   private filterChannels(channels: GridChannel[]): GridChannel[] {
@@ -544,6 +544,15 @@ export class ChannelListComponent implements OnInit, OnDestroy {
       .join('')
       .toUpperCase()
       .substring(0, 2);
+  }
+
+  /**
+   * Check if a DM channel's user is online via presenceMap, falling back to dm_user.is_online
+   */
+  isUserOnline(channel: GridChannel): boolean {
+    const userId = channel.dm_user?.user_id;
+    if (!userId) return false;
+    return this.presenceMap.get(userId) ?? channel.dm_user?.is_online ?? false;
   }
 
   /**

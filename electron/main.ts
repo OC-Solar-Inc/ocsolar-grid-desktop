@@ -1,4 +1,5 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, dialog } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 
 let mainWindow: BrowserWindow | null = null;
@@ -14,7 +15,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 12, y: 12 },
+    trafficLightPosition: { x: 12, y: 10 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -114,6 +115,31 @@ function createTray(): void {
   });
 }
 
+function setupAutoUpdater(): void {
+  if (isDev) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-downloaded', (info) => {
+    dialog.showMessageBox(mainWindow!, {
+      type: 'info',
+      title: 'Update Ready',
+      message: `Version ${info.version} has been downloaded.`,
+      detail: 'The update will be installed when you restart the app.',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+    }).then((result) => {
+      if (result.response === 0) {
+        isQuitting = true;
+        autoUpdater.quitAndInstall();
+      }
+    });
+  });
+
+  autoUpdater.checkForUpdatesAndNotify();
+}
+
 // Single instance lock
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -131,6 +157,24 @@ if (!gotTheLock) {
   app.whenReady().then(() => {
     createWindow();
     createTray();
+    setupAutoUpdater();
+
+    // Native notification handler
+    ipcMain.on('show-notification', (_event, { title, body }: { title: string; body: string }) => {
+      const notification = new Notification({ title, body });
+      notification.on('click', () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      });
+      notification.show();
+    });
+
+    // Badge count handler (macOS dock badge)
+    ipcMain.on('set-badge-count', (_event, count: number) => {
+      app.setBadgeCount(count);
+    });
   });
 }
 

@@ -46,6 +46,7 @@
         [currentChannel]="currentChannel"
         [isLoading]="isLoadingChannels"
         [users]="users"
+        [presenceMap]="presenceMap"
         (channelSelected)="selectChannel($event)"
         (channelCreated)="onChannelCreated($event)"
         (dmSelected)="onDmSelected($event)"
@@ -68,10 +69,13 @@
         <div class="channel-header" *ngIf="!isMobileView">
           <div class="channel-info">
             <ng-container *ngIf="currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct'; else desktopChannelIcon">
-              <img *ngIf="currentChannel.dm_user?.avatar_url" [src]="currentChannel.dm_user?.avatar_url" class="dm-header-avatar" alt="">
-              <span *ngIf="!currentChannel.dm_user?.avatar_url" class="dm-header-avatar-placeholder">
-                {{ (currentChannel.dm_user?.display_name || 'DM').charAt(0).toUpperCase() }}
-              </span>
+              <div class="dm-header-avatar-wrapper">
+                <img *ngIf="currentChannel.dm_user?.avatar_url" [src]="currentChannel.dm_user?.avatar_url" class="dm-header-avatar" alt="">
+                <span *ngIf="!currentChannel.dm_user?.avatar_url" class="dm-header-avatar-placeholder">
+                  {{ (currentChannel.dm_user?.display_name || 'DM').charAt(0).toUpperCase() }}
+                </span>
+                <span class="online-indicator" [class.online]="isDmUserOnline()"></span>
+              </div>
             </ng-container>
             <ng-template #desktopChannelIcon>
               <mat-icon>tag</mat-icon>

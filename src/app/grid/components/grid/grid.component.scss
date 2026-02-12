@@ -307,6 +307,11 @@ $online-green: #2eb67d;
   color: var(--grid-sidebar-text);
   gap: 8px;
   z-index: 100;
+  -webkit-app-region: drag;
+
+  button {
+    -webkit-app-region: no-drag;
+  }
 
   .channel-name {
     display: flex;
@@ -519,6 +524,12 @@ $online-green: #2eb67d;
   padding: 12px 20px;
   border-bottom: 1px solid var(--grid-chat-border);
   min-height: 56px;
+  -webkit-app-region: drag;
+
+  // Allow buttons/interactive elements to remain clickable
+  button, a, input, .channel-actions {
+    -webkit-app-region: no-drag;
+  }
 
   .channel-info {
     display: flex;
@@ -530,6 +541,28 @@ $online-green: #2eb67d;
       font-size: 20px;
       width: 20px;
       height: 20px;
+    }
+
+    .dm-header-avatar-wrapper {
+      position: relative;
+      display: inline-flex;
+      flex-shrink: 0;
+
+      .online-indicator {
+        position: absolute;
+        bottom: -1px;
+        right: -1px;
+        width: 8px;
+        height: 8px;
+        background: transparent;
+        border: 1.5px solid var(--grid-chat-text-muted);
+        border-radius: 50%;
+
+        &.online {
+          background: $online-green;
+          border-color: var(--grid-chat-bg, #ffffff);
+        }
+      }
     }
 
     .dm-header-avatar {

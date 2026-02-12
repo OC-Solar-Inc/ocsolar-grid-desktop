@@ -30,6 +30,7 @@
     </div>
   </div>
 
+  <div class="channel-list-scroll">
   <!-- Activity View -->
   <ng-container *ngIf="showActivityView">
     <!-- Activity Filter Bar -->
@@ -445,7 +446,7 @@
         >
           <div class="dm-avatar">
             <span>{{ dm.dm_user?.display_name?.charAt(0) || 'U' }}</span>
-            <span class="online-indicator" *ngIf="dm.dm_user?.is_online"></span>
+            <span class="online-indicator" [class.online]="isUserOnline(dm)"></span>
           </div>
           <div class="dm-info">
             <span class="dm-name">{{ getChannelDisplayName(dm) }}</span>
@@ -487,5 +488,6 @@
     >
       <mat-icon>{{ isNexusMenuOpen ? 'chevron_left' : 'chevron_right' }}</mat-icon>
     </button>
+  </div>
   </div>
 </div>
