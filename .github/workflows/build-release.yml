@@ -22,6 +22,7 @@ jobs:
 
       - name: Write environment files
         run: |
+          mkdir -p src/environments
           echo "${{ secrets.ENVIRONMENT_TS }}" > src/environments/environment.ts
           echo "${{ secrets.ENVIRONMENT_PROD_TS }}" > src/environments/environment.prod.ts
 
@@ -64,6 +65,7 @@ jobs:
 
       - name: Write environment files
         run: |
+          mkdir -p src/environments
           echo "${{ secrets.ENVIRONMENT_TS }}" > src/environments/environment.ts
           echo "${{ secrets.ENVIRONMENT_PROD_TS }}" > src/environments/environment.prod.ts
 
