@@ -21,10 +21,13 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Write environment files
+        env:
+          ENV_TS: ${{ secrets.ENVIRONMENT_TS }}
+          ENV_PROD_TS: ${{ secrets.ENVIRONMENT_PROD_TS }}
         run: |
           mkdir -p src/environments
-          echo "${{ secrets.ENVIRONMENT_TS }}" > src/environments/environment.ts
-          echo "${{ secrets.ENVIRONMENT_PROD_TS }}" > src/environments/environment.prod.ts
+          echo "$ENV_TS" | base64 --decode > src/environments/environment.ts
+          echo "$ENV_PROD_TS" | base64 --decode > src/environments/environment.prod.ts
 
       - name: Build Angular
         run: npm run build:prod
@@ -64,10 +67,14 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Write environment files
+        env:
+          ENV_TS: ${{ secrets.ENVIRONMENT_TS }}
+          ENV_PROD_TS: ${{ secrets.ENVIRONMENT_PROD_TS }}
+        shell: bash
         run: |
           mkdir -p src/environments
-          echo "${{ secrets.ENVIRONMENT_TS }}" > src/environments/environment.ts
-          echo "${{ secrets.ENVIRONMENT_PROD_TS }}" > src/environments/environment.prod.ts
+          echo "$ENV_TS" | base64 --decode > src/environments/environment.ts
+          echo "$ENV_PROD_TS" | base64 --decode > src/environments/environment.prod.ts
 
       - name: Build Angular
         run: npm run build:prod
