@@ -1,7 +1,8 @@
 import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import { AngularFirestore } from '@angular/fire/compat/firestore';
 import { serverTimestamp } from '@angular/fire/firestore';
-import { Subscription } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { GridWebsocketService } from './grid-websocket.service';
 import { IdleConnectionService, IdleState } from './idle-connection.service';
 
@@ -73,5 +74,26 @@ export class UserPresenceService implements OnDestroy {
   private onBeforeUnload(): void {
     this.currentStatus = null;
     this.setStatus('offline');
+  }
+
+  /**
+   * Real-time listener on the entire user_presence collection.
+   * Emits a Map<userId, isOnline> whenever any user's presence changes.
+   * This mirrors the Flutter app's Firestore snapshot approach.
+   */
+  watchAllPresence$(): Observable<Map<string, boolean>> {
+    return this.afs.collection<{ status?: string }>('user_presence')
+      .snapshotChanges()
+      .pipe(
+        map(actions => {
+          const presenceMap = new Map<string, boolean>();
+          actions.forEach(action => {
+            const data = action.payload.doc.data();
+            const userId = action.payload.doc.id;
+            presenceMap.set(userId, data?.status === 'active' || data?.status === 'background');
+          });
+          return presenceMap;
+        })
+      );
   }
 }

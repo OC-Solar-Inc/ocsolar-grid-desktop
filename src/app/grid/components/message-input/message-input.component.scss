@@ -15,7 +15,7 @@ $success-color: #388e3c;
 }
 
 .message-input-container {
-  padding: 12px 20px 16px;
+  padding: 8px 20px 8px;
   border-top: 1px solid var(--grid-chat-border);
   background: var(--grid-chat-bg);
 
@@ -201,9 +201,7 @@ $success-color: #388e3c;
 
 .input-wrapper {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: nowrap;
+  flex-direction: column;
   background: var(--grid-chat-input-bg);
   border: 1px solid var(--grid-chat-border);
   border-radius: 8px;
@@ -220,11 +218,23 @@ $success-color: #388e3c;
   }
 }
 
+.input-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px;
+  border-top: 1px solid var(--grid-chat-border);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+}
+
 .attach-button,
 .emoji-button,
 .gif-button {
   color: var(--grid-chat-text-muted);
-  margin-left: 4px;
   flex-shrink: 0;
 
   &:hover:not(:disabled) {
@@ -236,31 +246,27 @@ $success-color: #388e3c;
   }
 
   mat-icon {
-    font-size: 22px;
-    width: 22px;
-    height: 22px;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
   }
-}
-
-.emoji-button,
-.gif-button {
-  margin-left: 0;
 }
 
 .message-textarea {
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
-  padding: 12px 8px;
+  padding: 10px 12px;
   border: none;
   outline: none;
   resize: none;
   font-family: inherit;
   font-size: 15px;
-  line-height: 1.46;
+  line-height: 1.4;
   color: var(--grid-chat-text);
   background: transparent;
-  min-height: 44px;
+  min-height: 0;
+  height: 22px;
   max-height: 200px;
 
   &::placeholder {

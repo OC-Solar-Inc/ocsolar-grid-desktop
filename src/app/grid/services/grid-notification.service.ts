@@ -24,6 +24,8 @@ export class GridNotificationService {
   private enabledSubject = new BehaviorSubject<boolean>(false);
   private bannerVisibleSubject = new BehaviorSubject<boolean>(false);
   private preferencesSubject = new BehaviorSubject<NotificationPreferences>(DEFAULT_PREFERENCES);
+  private currentChannelId: string | null = null;
+  private isElectron = !!(window as any).electronAPI;
 
   public enabled$: Observable<boolean> = this.enabledSubject.asObservable();
   public bannerVisible$: Observable<boolean> = this.bannerVisibleSubject.asObservable();
@@ -51,8 +53,7 @@ export class GridNotificationService {
     }
 
     // Show banner if notifications aren't enabled and user hasn't dismissed it
-    // Also check that the Notification API is available
-    const notificationsSupported = 'Notification' in window;
+    const notificationsSupported = this.isElectron || ('Notification' in window);
     this.bannerVisibleSubject.next(
       notificationsSupported && !enabled && !dismissed
     );
@@ -62,6 +63,16 @@ export class GridNotificationService {
    * Request browser notification permission and enable notifications if granted.
    */
   async requestPermission(): Promise<boolean> {
+    // In Electron, native notifications are handled by the main process via IPC.
+    // OS-level permission is managed by macOS System Settings, so we just enable.
+    if (this.isElectron) {
+      this.enabledSubject.next(true);
+      localStorage.setItem(ENABLED_KEY, 'true');
+      this.bannerVisibleSubject.next(false);
+      localStorage.setItem(DISMISSED_KEY, 'true');
+      return true;
+    }
+
     if (!('Notification' in window)) {
       console.warn('Grid Notifications: Browser does not support notifications');
       return false;
@@ -114,28 +125,58 @@ export class GridNotificationService {
   }
 
   /**
-   * Show a desktop notification if enabled, the type is allowed, and tab is not focused.
+   * Track which channel the user is currently viewing so we can suppress
+   * notifications for that channel only (instead of blocking all notifications
+   * when the app window is visible).
+   */
+  setCurrentChannel(channelId: string | null): void {
+    this.currentChannelId = channelId;
+  }
+
+  /**
+   * Show a desktop notification if enabled, the type is allowed, and the user
+   * is not currently viewing the notification's channel.
+   *
+   * In Electron, uses native notifications via IPC for reliable macOS integration.
+   * Falls back to the browser Notification API otherwise.
    */
   showNotification(title: string, body: string, type: NotificationType, channelId?: string): void {
+    const truncatedBody = body.length > 100 ? body.substring(0, 100) + '...' : body;
+
     console.log('Grid Notifications: showNotification called', {
       title,
       type,
       enabled: this.enabledSubject.value,
       typeAllowed: this.preferencesSubject.value[type],
+      currentChannel: this.currentChannelId,
+      notificationChannel: channelId,
       documentHidden: document.hidden,
-      notificationSupported: 'Notification' in window,
-      permission: ('Notification' in window) ? Notification.permission : 'N/A',
+      isElectron: this.isElectron,
     });
 
     if (!this.enabledSubject.value) { console.log('Grid Notifications: BLOCKED — not enabled'); return; }
     if (!this.preferencesSubject.value[type]) { console.log('Grid Notifications: BLOCKED — type disabled:', type); return; }
-    if (!document.hidden) { console.log('Grid Notifications: BLOCKED — tab is focused'); return; }
+
+    // Only suppress if the user is actively viewing this exact channel AND the window is focused
+    if (channelId && channelId === this.currentChannelId && !document.hidden) {
+      console.log('Grid Notifications: BLOCKED — user is viewing this channel');
+      return;
+    }
+
+    // Use native Electron notifications when available
+    if (this.isElectron) {
+      console.log('Grid Notifications: SENDING via Electron native notification');
+      window.electronAPI!.showNotification(title, truncatedBody);
+      return;
+    }
+
+    // Fallback to browser Notification API (for web builds)
     if (!('Notification' in window)) { console.log('Grid Notifications: BLOCKED — API not supported'); return; }
     if (Notification.permission !== 'granted') { console.log('Grid Notifications: BLOCKED — permission:', Notification.permission); return; }
 
-    console.log('Grid Notifications: SENDING notification');
+    console.log('Grid Notifications: SENDING via browser Notification API');
     const notification = new Notification(title, {
-      body: body.length > 100 ? body.substring(0, 100) + '...' : body,
+      body: truncatedBody,
       icon: 'assets/images/Grid_Black.png',
       tag: channelId || 'grid-notification',
     });

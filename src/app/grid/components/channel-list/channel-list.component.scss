@@ -25,7 +25,7 @@ $online-green: #2eb67d;
   color: var(--grid-sidebar-text);
   overflow: hidden;
   position: relative;
-  padding-bottom: 56px; // Space for the fixed toggle button
+  padding-bottom: 0;
 }
 
 // Header
@@ -35,6 +35,8 @@ $online-green: #2eb67d;
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid var(--grid-sidebar-border);
+  flex-shrink: 0;
+  -webkit-app-region: drag;
 
   h1 {
     margin: 0;
@@ -46,6 +48,7 @@ $online-green: #2eb67d;
     display: flex;
     align-items: center;
     gap: 4px;
+    -webkit-app-region: no-drag;
   }
 
   .settings-button {
@@ -65,9 +68,15 @@ $online-green: #2eb67d;
   }
 }
 
-// Search
+.channel-list-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+// Search (hidden - moved to title bar)
 .search-container {
-  display: flex;
+  display: none;
   align-items: center;
   margin: 12px 16px;
   padding: 6px 12px;
@@ -420,12 +429,6 @@ $online-green: #2eb67d;
 .section {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-
-  &:first-of-type {
-    flex: 1;
-    min-height: 0;
-  }
 }
 
 .section-header {
@@ -618,8 +621,6 @@ $online-green: #2eb67d;
   list-style: none;
   margin: 0;
   padding: 0;
-  overflow-y: auto;
-  flex: 1;
 }
 
 .channel-item {
@@ -706,13 +707,18 @@ $online-green: #2eb67d;
 
     .online-indicator {
       position: absolute;
-      bottom: -2px;
-      right: -2px;
-      width: 10px;
-      height: 10px;
-      background: $online-green;
-      border: 2px solid var(--grid-online-indicator-border);
+      bottom: -1px;
+      right: -1px;
+      width: 8px;
+      height: 8px;
+      background: transparent;
+      border: 1.5px solid var(--grid-sidebar-text-muted);
       border-radius: 50%;
+
+      &.online {
+        background: $online-green;
+        border-color: var(--grid-online-indicator-border);
+      }
     }
   }
 

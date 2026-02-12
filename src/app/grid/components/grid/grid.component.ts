@@ -97,6 +97,8 @@ export class GridComponent implements OnInit, OnDestroy {
 
   // User lookup map for display names
   userMap = new Map<string, User>();
+  // Real-time presence map: userId → isOnline
+  presenceMap = new Map<string, boolean>();
   // Users array for DM selection
   users: User[] = [];
   // Current user ID for message alignment
@@ -142,6 +144,16 @@ export class GridComponent implements OnInit, OnDestroy {
     if (this.currentUserId) {
       this.userPresence.initialize(this.currentUserId, this.gridWs);
     }
+
+    // Real-time presence listener from Firestore (mirrors Flutter app approach)
+    this.userPresence.watchAllPresence$()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((firestorePresence) => {
+        firestorePresence.forEach((isOnline, userId) => {
+          this.presenceMap.set(userId, isOnline);
+        });
+        this.cdr.markForCheck();
+      });
 
     // Subscribe to theme changes
     this.gridThemeService.theme$
@@ -189,8 +201,10 @@ export class GridComponent implements OnInit, OnDestroy {
     this.typingUsers = [];
     this.threadReplies = [];
     this.userMap.clear();
+    this.presenceMap.clear();
     this.users = [];
     this.currentChannel = null;
+    this.gridNotification.setCurrentChannel(null);
     this.threadParentMessage = null;
   }
 
@@ -514,6 +528,14 @@ export class GridComponent implements OnInit, OnDestroy {
         this.gridApi.markAsRead(channelId, lastReadMessageId).subscribe({
           error: (err) => console.error('Grid: mark_read REST fallback failed:', err),
         });
+      });
+
+    // Presence updates - real-time online/offline status
+    this.gridWs.presenceUpdate$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ userId, isOnline }) => {
+        this.presenceMap.set(userId, isOnline);
+        this.cdr.markForCheck();
       });
   }
 
@@ -871,6 +893,7 @@ export class GridComponent implements OnInit, OnDestroy {
     this.unreadCountOnEntry = channel.unread_count || 0;
 
     this.currentChannel = channel;
+    this.gridNotification.setCurrentChannel(channel.id);
     this.messages = [];
     this.messageBuffer = []; // Clear buffer when changing channels
     this.typingUsers = [];
@@ -1490,5 +1513,14 @@ export class GridComponent implements OnInit, OnDestroy {
    */
   dismissNotificationBanner(): void {
     this.gridNotification.dismissBanner();
+  }
+
+  /**
+   * Check if the current DM user is online via presenceMap
+   */
+  isDmUserOnline(): boolean {
+    const userId = this.currentChannel?.dm_user?.user_id;
+    if (!userId) return false;
+    return this.presenceMap.get(userId) ?? this.currentChannel?.dm_user?.is_online ?? false;
   }
 }
