@@ -43,7 +43,16 @@ function createWindow(): void {
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
-      mainWindow?.hide();
+      if (mainWindow?.isFullScreen()) {
+        // Exit fullscreen first — hiding during the fullscreen animation
+        // causes a black screen on macOS. Wait for the transition to finish.
+        mainWindow.once('leave-full-screen', () => {
+          mainWindow?.hide();
+        });
+        mainWindow.setFullScreen(false);
+      } else {
+        mainWindow?.hide();
+      }
     }
   });
 

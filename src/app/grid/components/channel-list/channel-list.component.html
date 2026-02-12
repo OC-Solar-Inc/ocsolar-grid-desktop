@@ -1,7 +1,8 @@
 <div class="channel-list">
   <!-- Header -->
   <div class="channel-list-header">
-    <h1>{{ showActivityView ? 'Activity' : 'The Grid' }}</h1>
+    <h1 *ngIf="showActivityView">Activity</h1>
+    <img *ngIf="!showActivityView" src="assets/images/the_grid_text.png" alt="The Grid" class="header-logo" />
     <div class="header-buttons">
       <!-- Activity / Home Button -->
       <button

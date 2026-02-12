@@ -159,7 +159,7 @@
       <ng-template #noChannelSelected>
         <div class="no-channel-selected">
           <img class="grid-icon" [src]="currentTheme === 'midnight' || currentTheme === 'aidansTheme' ? 'assets/images/Grid_White.png' : 'assets/images/Grid_Black.png'" alt="Grid" />
-          <h2>Welcome to the Grid</h2>
+          <img class="welcome-logo" [src]="currentTheme === 'midnight' || currentTheme === 'aidansTheme' || currentTheme === 'lucasTheme' || currentTheme === 'noir' || currentTheme === 'tesla' ? 'assets/images/the_grid_text.png' : 'assets/images/the_grid_text_dark.png'" alt="The Grid" />
           <p>Where everyone connects in one place. Select a channel or start a conversation to begin chatting.</p>
         </div>
       </ng-template>
