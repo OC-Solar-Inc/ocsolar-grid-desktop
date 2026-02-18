@@ -803,6 +803,7 @@ $online-green: #2eb67d;
   display: flex;
   flex-direction: column;
   z-index: 9999;
+  overflow: visible;
   animation: popupFadeIn 0.15s ease-out;
 
   @media (max-width: 768px) {
@@ -826,6 +827,7 @@ $online-green: #2eb67d;
 
 .settings-popup-content {
   padding: 12px 16px;
+  overflow: visible;
 }
 
 .settings-section {

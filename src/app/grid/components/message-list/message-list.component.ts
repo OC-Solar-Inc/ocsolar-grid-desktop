@@ -251,6 +251,22 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       return `<img src="${decodedUrl}" class="inline-gif" alt="GIF" loading="lazy" />`;
     });
 
+    // Linkify URLs — runs after GIPHY so those URLs are already <img> tags
+    // Negative lookbehind prevents matching URLs inside src="..." attributes
+    const urlPattern = /(?<!")https?:\/\/[^\s<>"]+/gi;
+    formatted = formatted.replace(urlPattern, (url) => {
+      // Strip trailing punctuation unlikely to be part of the URL
+      let cleanUrl = url;
+      let suffix = '';
+      const trailingMatch = url.match(/[.,;:!?)\]]+$/);
+      if (trailingMatch) {
+        cleanUrl = url.slice(0, -trailingMatch[0].length);
+        suffix = trailingMatch[0];
+      }
+      const href = cleanUrl.replace(/&amp;/g, '&');
+      return `<a href="${href}" class="message-link" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>${suffix}`;
+    });
+
     return this.sanitizer.bypassSecurityTrustHtml(formatted);
   }
 

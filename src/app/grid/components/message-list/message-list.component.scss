@@ -268,6 +268,15 @@ $error-color: #e01e5a;
     }
   }
 
+  ::ng-deep .message-link {
+    color: var(--grid-chat-accent);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
   // Inline GIF styling (GIPHY GIFs embedded in message text)
   ::ng-deep .inline-gif {
     display: block;
