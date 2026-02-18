@@ -804,6 +804,7 @@ $online-green: #2eb67d;
   flex-direction: column;
   z-index: 9999;
   overflow: visible;
+  -webkit-app-region: no-drag;
   animation: popupFadeIn 0.15s ease-out;
 
   @media (max-width: 768px) {
