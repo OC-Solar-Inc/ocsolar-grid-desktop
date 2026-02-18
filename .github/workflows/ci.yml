@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Write environment files
+        env:
+          ENV_TS: ${{ secrets.ENVIRONMENT_TS }}
+          ENV_PROD_TS: ${{ secrets.ENVIRONMENT_PROD_TS }}
+        run: |
+          mkdir -p src/environments
+          echo "$ENV_TS" | base64 --decode > src/environments/environment.ts
+          echo "$ENV_PROD_TS" | base64 --decode > src/environments/environment.prod.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npx ng build
+
+      - name: Set Chrome path from Puppeteer
+        run: |
+          CHROME_PATH=$(node -e "console.log(require('puppeteer').executablePath())")
+          echo "CHROME_BIN=$CHROME_PATH" >> $GITHUB_ENV
+
+      - name: Test
+        run: npm run test:ci
