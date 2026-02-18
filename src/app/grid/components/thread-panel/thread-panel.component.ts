@@ -294,9 +294,25 @@ export class ThreadPanelComponent implements OnChanges {
     const escaped = this.escapeHtml(content);
     // Match escaped HTML entities: &lt;@userId&gt;
     const mentionPattern = /&lt;@([A-Za-z0-9]+)&gt;/g;
-    const formatted = escaped.replace(mentionPattern, (match, userId) => {
+    let formatted = escaped.replace(mentionPattern, (match, userId) => {
       const displayName = this.getUserDisplayName(userId);
       return `<span class="mention">@${this.escapeHtml(displayName)}</span>`;
+    });
+
+    // Linkify URLs
+    // Negative lookbehind prevents matching URLs inside src="..." attributes
+    const urlPattern = /(?<!")https?:\/\/[^\s<>"]+/gi;
+    formatted = formatted.replace(urlPattern, (url) => {
+      // Strip trailing punctuation unlikely to be part of the URL
+      let cleanUrl = url;
+      let suffix = '';
+      const trailingMatch = url.match(/[.,;:!?)\]]+$/);
+      if (trailingMatch) {
+        cleanUrl = url.slice(0, -trailingMatch[0].length);
+        suffix = trailingMatch[0];
+      }
+      const href = cleanUrl.replace(/&amp;/g, '&');
+      return `<a href="${href}" class="message-link" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>${suffix}`;
     });
 
     return this.sanitizer.bypassSecurityTrustHtml(formatted);

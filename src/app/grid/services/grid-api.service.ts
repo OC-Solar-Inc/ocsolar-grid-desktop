@@ -425,7 +425,7 @@ export class GridApiService {
 
   getActivity(unreadOnly: boolean, limit: number): Observable<GridActivityItem[]> {
     const userId = this.getCurrentUserId();
-    let params = new HttpParams()
+    const params = new HttpParams()
       .set('user_id', userId || '')
       .set('unread_only', unreadOnly.toString())
       .set('limit', limit.toString());

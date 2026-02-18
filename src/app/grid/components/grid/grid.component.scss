@@ -814,7 +814,7 @@ $online-green: #2eb67d;
   }
 }
 
-// The Grid theme - Mention styling for own messages
+// The Grid theme - Mention & link styling for own messages
 :host.theme-theGrid {
   // Make mentions white and bold inside own messages (red bubbles)
   ::ng-deep .message-group.own-message .message-text .mention {
@@ -826,9 +826,18 @@ $online-green: #2eb67d;
       background-color: rgba(255, 255, 255, 0.3);
     }
   }
+
+  // Make links blue inside own messages (accent == bubble bg, so override needed)
+  ::ng-deep .message-group.own-message .message-text .message-link {
+    color: #90caf9;
+
+    &:hover {
+      color: #bbdefb;
+    }
+  }
 }
 
-// Aidan's Theme - Mention styling for own messages
+// Aidan's Theme - Mention & link styling for own messages
 :host.theme-aidansTheme {
   // Make mentions white and bold inside own messages (teal bubbles)
   ::ng-deep .message-group.own-message .message-text .mention {
@@ -838,6 +847,15 @@ $online-green: #2eb67d;
 
     &:hover {
       background-color: rgba(255, 255, 255, 0.3);
+    }
+  }
+
+  // Bright blue links for dark backgrounds
+  ::ng-deep .message-text .message-link {
+    color: #42a5f5;
+
+    &:hover {
+      color: #64b5f6;
     }
   }
 

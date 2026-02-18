@@ -111,8 +111,8 @@
     <div class="settings-popup-content">
       <div class="settings-section">
         <span class="settings-section-title">Theme</span>
-        <div class="theme-dropdown" (click)="showThemeDropdown = !showThemeDropdown; $event.stopPropagation()">
-          <div class="theme-dropdown-trigger">
+        <div class="theme-dropdown">
+          <div class="theme-dropdown-trigger" (click)="showThemeDropdown = !showThemeDropdown; $event.stopPropagation()">
             <div class="theme-color" [style.background]="currentThemeConfig?.colors?.primary"></div>
             <div class="theme-color" [style.background]="currentThemeConfig?.colors?.secondary"></div>
             <span class="theme-dropdown-label">{{ currentThemeConfig?.label }}</span>

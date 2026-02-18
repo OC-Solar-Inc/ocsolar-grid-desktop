@@ -146,6 +146,15 @@
       background-color: rgba(29, 155, 209, 0.2);
     }
   }
+
+  ::ng-deep .message-link {
+    color: var(--grid-chat-accent, #1264a3);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 .reply-count {
