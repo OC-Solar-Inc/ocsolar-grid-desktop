@@ -1,4 +1,18 @@
-<div class="message-input-container" [class.disabled]="disabled">
+<div
+  class="message-input-container"
+  [class.disabled]="disabled"
+  [class.drag-over]="isDragOver"
+  (dragenter)="onDragEnter($event)"
+  (dragover)="onDragOver($event)"
+  (dragleave)="onDragLeave($event)"
+  (drop)="onDrop($event)"
+>
+  <!-- Drag overlay -->
+  <div class="drag-overlay" *ngIf="isDragOver">
+    <mat-icon>cloud_upload</mat-icon>
+    <span>Drop files here</span>
+  </div>
+
   <!-- Hidden file input -->
   <input
     #fileInput
@@ -86,6 +100,7 @@
         [disabled]="disabled"
         (input)="onInput()"
         (keydown)="onKeyDown($event)"
+        (paste)="onPaste($event)"
         rows="1"
         class="message-textarea"
       ></textarea>

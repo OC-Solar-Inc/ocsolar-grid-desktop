@@ -15,12 +15,47 @@ $success-color: #388e3c;
 }
 
 .message-input-container {
+  position: relative;
   padding: 8px 20px 8px;
   border-top: 1px solid var(--grid-chat-border);
   background: var(--grid-chat-bg);
+  transition: border-color 0.2s, background-color 0.2s;
 
   &.disabled {
     background: var(--grid-chat-hover);
+  }
+
+  &.drag-over {
+    border-color: var(--grid-chat-accent, $accent-color);
+    background: rgba(18, 100, 163, 0.04);
+  }
+}
+
+.drag-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(18, 100, 163, 0.08);
+  border: 2px dashed var(--grid-chat-accent, $accent-color);
+  border-radius: 8px;
+  z-index: 100;
+  pointer-events: none;
+
+  mat-icon {
+    font-size: 36px;
+    width: 36px;
+    height: 36px;
+    color: var(--grid-chat-accent, $accent-color);
+  }
+
+  span {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--grid-chat-accent, $accent-color);
   }
 }
 

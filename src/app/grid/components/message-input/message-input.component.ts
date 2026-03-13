@@ -195,6 +195,10 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
   pendingUploads: GridFileUploadProgress[] = [];
   completedAttachments: GridMessageAttachment[] = [];
 
+  // Drag-and-drop state
+  isDragOver = false;
+  private dragCounter = 0;
+
   // Mention autocomplete state
   showMentionDropdown = false;
   mentionSuggestions: MentionSuggestion[] = [];
@@ -426,6 +430,51 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
     if (this.isTyping) {
       this.isTyping = false;
       this.typingStopped.emit();
+    }
+  }
+
+  // Paste and drag-and-drop methods
+  onPaste(event: ClipboardEvent): void {
+    if (this.disabled) return;
+    const files = Array.from(event.clipboardData?.files || []);
+    if (files.length === 0) return;
+    event.preventDefault();
+    this.uploadFiles(files);
+  }
+
+  onDragEnter(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.disabled) return;
+    this.dragCounter++;
+    if (this.dragCounter === 1) {
+      this.isDragOver = true;
+    }
+  }
+
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  onDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.dragCounter--;
+    if (this.dragCounter === 0) {
+      this.isDragOver = false;
+    }
+  }
+
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.dragCounter = 0;
+    this.isDragOver = false;
+    if (this.disabled) return;
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (files.length > 0) {
+      this.uploadFiles(files);
     }
   }
 
