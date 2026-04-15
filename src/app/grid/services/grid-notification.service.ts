@@ -33,6 +33,15 @@ export class GridNotificationService {
 
   constructor() {
     this.loadFromStorage();
+
+    // Auto-enable notifications in Electron — native OS notifications don't
+    // require a browser permission prompt, so enable by default unless the
+    // user has explicitly toggled the setting before.
+    if (this.isElectron && localStorage.getItem(ENABLED_KEY) === null) {
+      this.enabledSubject.next(true);
+      localStorage.setItem(ENABLED_KEY, 'true');
+      this.bannerVisibleSubject.next(false);
+    }
   }
 
   private loadFromStorage(): void {

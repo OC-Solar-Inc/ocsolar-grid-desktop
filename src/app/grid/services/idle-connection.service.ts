@@ -126,11 +126,9 @@ export class IdleConnectionService implements OnDestroy {
     if (document.hidden) {
       this.clearIdleTimer();
       this.updateIdleState('hidden');
-      if (!this.gridNotification.isEnabled()) {
-        this.disconnectForIdle('Tab hidden');
-      } else {
-        console.log('IdleConnectionService: Tab hidden but notifications enabled, keeping connection alive');
-      }
+      // Keep WebSocket alive when hidden so DM/channel/mention notifications
+      // can still be received and pushed as desktop notifications
+      console.log('IdleConnectionService: Tab hidden, keeping connection alive for notifications');
     } else if (!wasVisible) {
       this.updateIdleState(this.isUserActive ? 'active' : 'idle');
       if (this.wasDisconnectedDueToIdle) {
