@@ -149,7 +149,7 @@ export class GroupMembersPopupComponent implements OnInit {
    * Check if current user can add members
    */
   canAddMembers(): boolean {
-    return this.currentUserRole === 'owner' || this.currentUserRole === 'admin';
+    return this.currentUserRole === 'owner' || this.currentUserRole === 'admin' || this.currentUserRole === 'member';
   }
 
   /**

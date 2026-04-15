@@ -146,12 +146,14 @@
         <lib-message-input
           [channelId]="currentChannel.id"
           [channelName]="(currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct') ? (currentChannel.dm_user?.display_name || 'Direct Message') : currentChannel.name"
-          [disabled]="connectionState === 'disconnected'"
+          [disabled]="connectionState !== 'connected'"
+          [connectionState]="connectionState"
           [userMap]="userMap"
           [channel]="currentChannel"
           (messageSent)="sendMessage($event)"
           (typingStarted)="onTypingStarted()"
-          (typingStopped)="onTypingStopped()">
+          (typingStopped)="onTypingStopped()"
+          (retryConnection)="retryConnection()">
         </lib-message-input>
       </ng-container>
 

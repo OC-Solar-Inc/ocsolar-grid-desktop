@@ -105,6 +105,16 @@ export class GridWebsocketService implements OnDestroy {
       return;
     }
 
+    // Clean up any stale socket so its onclose doesn't interfere
+    if (this.socket) {
+      this.socket.onopen = null;
+      this.socket.onmessage = null;
+      this.socket.onerror = null;
+      this.socket.onclose = null;
+      try { this.socket.close(); } catch { /* ignore */ }
+      this.socket = null;
+    }
+
     this.connectionStateSubject.next('connecting');
 
     try {
@@ -468,6 +478,8 @@ export class GridWebsocketService implements OnDestroy {
   private attemptReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('Max reconnect attempts reached for Grid WebSocket');
+      this.socket = null;
+      this.connectionStateSubject.next('disconnected');
       this.errorSubject.next({ error: 'Unable to reconnect to chat server' });
       return;
     }
@@ -486,6 +498,27 @@ export class GridWebsocketService implements OnDestroy {
     this.reconnectTimeout = setTimeout(() => {
       this.connect();
     }, delay);
+  }
+
+  /**
+   * Force a fresh reconnection — resets retry counter and cleans up stale socket.
+   * Called when the system resumes from sleep or user clicks retry.
+   */
+  forceReconnect(): void {
+    console.log('Grid WebSocket: Force reconnect requested');
+    this.stopPingPong();
+    this.clearReconnectTimeout();
+    this.reconnectAttempts = 0;
+    this.reconnectDelay = 1000;
+    this.disconnectReason = null;
+
+    if (this.socket) {
+      try { this.socket.close(1000, 'Force reconnect'); } catch { /* ignore */ }
+      this.socket = null;
+    }
+
+    this.connectionStateSubject.next('reconnecting');
+    this.connect();
   }
 
   private clearReconnectTimeout(): void {

@@ -26,6 +26,7 @@ import {
   GridMessageAttachment,
   GridFileUploadProgress,
   GridChannel,
+  GridWsConnectionState,
 } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 
@@ -177,6 +178,7 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
   @Input() channelId = '';
   @Input() channelName = '';
   @Input() disabled = false;
+  @Input() connectionState: GridWsConnectionState = 'connected';
   @Input() placeholder?: string;
   @Input() userMap: Map<string, User> = new Map();
   @Input() channel: GridChannel | null = null;
@@ -184,6 +186,7 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
   @Output() messageSent = new EventEmitter<MessageSendEvent>();
   @Output() typingStarted = new EventEmitter<void>();
   @Output() typingStopped = new EventEmitter<void>();
+  @Output() retryConnection = new EventEmitter<void>();
 
   @ViewChild('textarea') textareaRef!: ElementRef<HTMLTextAreaElement>;
   @ViewChild('fileInput') fileInputRef!: ElementRef<HTMLInputElement>;

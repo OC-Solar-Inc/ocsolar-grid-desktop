@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, dialog } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, dialog, powerMonitor } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 
@@ -183,6 +183,27 @@ if (!gotTheLock) {
     // Badge count handler (macOS dock badge)
     ipcMain.on('set-badge-count', (_event, count: number) => {
       app.setBadgeCount(count);
+    });
+
+    // Power state monitoring — notify renderer on sleep/wake
+    powerMonitor.on('suspend', () => {
+      console.log('System suspended');
+      mainWindow?.webContents.send('system-power-state', 'suspend');
+    });
+
+    powerMonitor.on('resume', () => {
+      console.log('System resumed');
+      mainWindow?.webContents.send('system-power-state', 'resume');
+    });
+
+    powerMonitor.on('lock-screen', () => {
+      console.log('Screen locked');
+      mainWindow?.webContents.send('system-power-state', 'lock');
+    });
+
+    powerMonitor.on('unlock-screen', () => {
+      console.log('Screen unlocked');
+      mainWindow?.webContents.send('system-power-state', 'unlock');
     });
   });
 }

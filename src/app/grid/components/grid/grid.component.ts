@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, HostBinding, ChangeDetectionStrategy, ChangeDetectorRef, ViewChild, Inject, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, HostBinding, ChangeDetectionStrategy, ChangeDetectorRef, ViewChild, Inject, Output, EventEmitter, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject, forkJoin } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -112,6 +112,9 @@ export class GridComponent implements OnInit, OnDestroy {
   // Track recently sent message hashes to detect duplicates from WebSocket echo
   private recentMessageHashes = new Set<string>();
 
+  // Cleanup function for Electron power state listener
+  private removePowerListener: (() => void) | null = null;
+
   constructor(
     private gridApi: GridApiService,
     private gridWs: GridWebsocketService,
@@ -121,7 +124,8 @@ export class GridComponent implements OnInit, OnDestroy {
     private gridThemeService: GridThemeService,
     private gridNotification: GridNotificationService,
     private userPresence: UserPresenceService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) {
     // Initialize theme
     this.currentTheme = this.gridThemeService.getTheme();
@@ -177,12 +181,47 @@ export class GridComponent implements OnInit, OnDestroy {
         this.notificationsEnabled = enabled;
         this.cdr.markForCheck();
       });
+
+    // Listen for system resume (sleep/wake) from Electron
+    if (window.electronAPI?.onPowerStateChange) {
+      this.removePowerListener = window.electronAPI.onPowerStateChange((state) => {
+        if (state === 'resume' || state === 'unlock') {
+          console.log('System resumed/unlocked, forcing WebSocket reconnect');
+          this.ngZone.run(() => {
+            this.gridWs.forceReconnect();
+          });
+        }
+      });
+    }
+
+    // Fallback: browser online event (covers non-Electron and network changes)
+    window.addEventListener('online', this.onNetworkOnline);
+  }
+
+  private onNetworkOnline = (): void => {
+    if (!this.gridWs.isConnected()) {
+      console.log('Network online detected, forcing WebSocket reconnect');
+      this.ngZone.run(() => {
+        this.gridWs.forceReconnect();
+      });
+    }
+  };
+
+  retryConnection(): void {
+    this.gridWs.forceReconnect();
   }
 
   ngOnDestroy(): void {
     // Signal all subscriptions to complete
     this.destroy$.next();
     this.destroy$.complete();
+
+    // Cleanup power state and network listeners
+    if (this.removePowerListener) {
+      this.removePowerListener();
+      this.removePowerListener = null;
+    }
+    window.removeEventListener('online', this.onNetworkOnline);
 
     // Cleanup idle monitoring and user presence
     this.idleConnection.destroy();

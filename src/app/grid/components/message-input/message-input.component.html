@@ -298,7 +298,14 @@
   </div>
 
   <div class="disconnected-hint" *ngIf="disabled">
-    <mat-icon>wifi_off</mat-icon>
-    <span>Reconnecting to chat...</span>
+    <ng-container *ngIf="connectionState === 'reconnecting'; else disconnectedState">
+      <mat-icon>wifi_off</mat-icon>
+      <span>Reconnecting to chat...</span>
+    </ng-container>
+    <ng-template #disconnectedState>
+      <mat-icon>wifi_off</mat-icon>
+      <span>Disconnected from chat.</span>
+      <button class="retry-button" (click)="retryConnection.emit()">Retry</button>
+    </ng-template>
   </div>
 </div>
