@@ -123,8 +123,10 @@
               [users]="channelListRef?.filteredUsersForGroup || []"
               [userMap]="userMap"
               [currentUserId]="currentUserId"
+              [isReplyOnly]="currentChannel.is_reply_only || false"
               (close)="closeMembersPopup()"
-              (membersChanged)="onMembersChanged()">
+              (membersChanged)="onMembersChanged()"
+              (replyOnlyToggled)="onReplyOnlyToggled()">
             </lib-group-members-popup>
           </ng-container>
         </div>
@@ -139,11 +141,19 @@
           [currentUserId]="currentUserId"
           [unreadCountOnEntry]="unreadCountOnEntry"
           (loadMore)="loadMoreMessages()"
-          (openThread)="openThreadPanel($event)">
+          (openThread)="openThreadPanel($event)"
+          (resolveToggled)="onResolveToggled($event)">
         </lib-message-list>
+
+        <!-- Reply-Only Banner -->
+        <div class="reply-only-banner" *ngIf="isReplyOnlyRestricted()">
+          <mat-icon>lock</mat-icon>
+          <span>This group is in reply-only mode. Only the group owner can post new messages. You can reply in threads.</span>
+        </div>
 
         <!-- Message Input -->
         <lib-message-input
+          *ngIf="!isReplyOnlyRestricted()"
           [channelId]="currentChannel.id"
           [channelName]="(currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct') ? (currentChannel.dm_user?.display_name || 'Direct Message') : currentChannel.name"
           [disabled]="connectionState !== 'connected'"

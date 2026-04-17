@@ -76,6 +76,9 @@ export class GridWebsocketService implements OnDestroy {
   private memberLeftSubject = new Subject<{ channelId: string; userId: string }>();
   public memberLeft$ = this.memberLeftSubject.asObservable();
 
+  private messageResolvedSubject = new Subject<{ message: GridMessage; channelId: string }>();
+  public messageResolved$ = this.messageResolvedSubject.asObservable();
+
   private activitySubject = new Subject<void>();
   public activity$ = this.activitySubject.asObservable();
 
@@ -314,6 +317,15 @@ export class GridWebsocketService implements OnDestroy {
           channelId: mentionChannelId,
           message: mentionData.message,
           mentionerId: mentionData.mentioner_id,
+        });
+        break;
+
+      case 'message_resolved':
+        console.log('Grid WebSocket: Message resolved:', JSON.stringify(data, null, 2));
+        const resolvedData = data as any;
+        this.messageResolvedSubject.next({
+          message: resolvedData.message,
+          channelId: resolvedData.channel_id || resolvedData.message?.channel,
         });
         break;
 

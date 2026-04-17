@@ -576,6 +576,24 @@ export class GridComponent implements OnInit, OnDestroy {
         this.presenceMap.set(userId, isOnline);
         this.cdr.markForCheck();
       });
+
+    // Message resolved updates
+    this.gridWs.messageResolved$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ message, channelId }) => {
+        if (this.currentChannel?.id === channelId && message) {
+          this.messages = this.messages.map(m =>
+            m.id === message.id ? { ...m, is_resolved: message.is_resolved, resolved_by_name: message.resolved_by_name } : m
+          );
+          // Also update thread replies if applicable
+          if (this.threadParentMessage) {
+            this.threadReplies = this.threadReplies.map(m =>
+              m.id === message.id ? { ...m, is_resolved: message.is_resolved, resolved_by_name: message.resolved_by_name } : m
+            );
+          }
+          this.cdr.markForCheck();
+        }
+      });
   }
 
   /**
@@ -1199,6 +1217,69 @@ export class GridComponent implements OnInit, OnDestroy {
     // Refresh the current channel's member data if needed
     // The popup handles its own member list refresh
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Handle resolve toggled on a message
+   */
+  onResolveToggled(message: GridMessage): void {
+    if (!this.currentUserId) return;
+
+    const user = this.userMap.get(this.currentUserId);
+    const userName = user
+      ? (user.sFullName || `${user.sFirstName} ${user.sLastName}`.trim() || 'Unknown')
+      : 'Unknown';
+
+    this.gridApi.toggleResolveMessage(message.id, this.currentUserId, userName).subscribe({
+      next: (updatedMessage) => {
+        this.messages = this.messages.map(m =>
+          m.id === message.id ? { ...m, is_resolved: updatedMessage.is_resolved, resolved_by_name: updatedMessage.resolved_by_name } : m
+        );
+        // Also update thread replies if applicable
+        if (this.threadParentMessage) {
+          this.threadReplies = this.threadReplies.map(m =>
+            m.id === message.id ? { ...m, is_resolved: updatedMessage.is_resolved, resolved_by_name: updatedMessage.resolved_by_name } : m
+          );
+        }
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error toggling resolve:', error);
+      },
+    });
+  }
+
+  /**
+   * Handle reply-only toggled from group members popup
+   */
+  onReplyOnlyToggled(): void {
+    if (!this.currentChannel || !this.currentUserId) return;
+
+    this.gridApi.toggleReplyOnly(this.currentChannel.id, this.currentUserId).subscribe({
+      next: (updatedChannel) => {
+        // Update current channel
+        if (this.currentChannel) {
+          this.currentChannel = { ...this.currentChannel, is_reply_only: updatedChannel.is_reply_only };
+        }
+        // Update channels list
+        this.channels = this.channels.map(c =>
+          c.id === updatedChannel.id ? { ...c, is_reply_only: updatedChannel.is_reply_only } : c
+        );
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error toggling reply-only:', error);
+      },
+    });
+  }
+
+  /**
+   * Check if the current user is restricted by reply-only mode
+   * Returns true if the channel is reply-only AND the current user is NOT the owner
+   */
+  isReplyOnlyRestricted(): boolean {
+    if (!this.currentChannel?.is_reply_only) return false;
+    return this.currentChannel.created_by_id !== this.currentUserId;
   }
 
   /**

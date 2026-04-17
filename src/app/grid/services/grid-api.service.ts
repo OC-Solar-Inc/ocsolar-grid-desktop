@@ -214,6 +214,7 @@ export class GridApiService {
         user_id: data.user_id,
         user_ids: data.user_ids,
         name: data.name || undefined,
+        ...(data.is_reply_only !== undefined && { is_reply_only: data.is_reply_only }),
       })
       .pipe(catchError(this.handleError<GridChannel>('createGroup')));
   }
@@ -345,6 +346,23 @@ export class GridApiService {
         body: { user_id: userId },
       })
       .pipe(catchError(this.handleError<void>('deleteMessage')));
+  }
+
+  toggleResolveMessage(messageId: string, userId: string, userName: string): Observable<GridMessage> {
+    return this.http
+      .post<GridMessage>(`${this.baseUrl}/chat/messages/${messageId}/toggle_resolve/`, {
+        user_id: userId,
+        user_name: userName,
+      })
+      .pipe(catchError(this.handleError<GridMessage>('toggleResolveMessage')));
+  }
+
+  toggleReplyOnly(channelId: string, userId: string): Observable<GridChannel> {
+    return this.http
+      .post<GridChannel>(`${this.baseUrl}/chat/channels/${channelId}/toggle_reply_only/`, {
+        user_id: userId,
+      })
+      .pipe(catchError(this.handleError<GridChannel>('toggleReplyOnly')));
   }
 
   markAsRead(channelId: string, lastReadMessageId?: string): Observable<void> {

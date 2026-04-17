@@ -339,6 +339,11 @@
                   <span>Loading employees...</span>
                 </div>
               </div>
+              <div class="group-popup-reply-only" (click)="newGroupReplyOnly = !newGroupReplyOnly">
+                <mat-icon>{{ newGroupReplyOnly ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+                <span>Reply only</span>
+                <span class="reply-only-hint">Only you can post, others can reply in threads</span>
+              </div>
               <div class="group-popup-footer">
                 <span class="selected-count">{{ selectedGroupMembers.length }} selected</span>
                 <button

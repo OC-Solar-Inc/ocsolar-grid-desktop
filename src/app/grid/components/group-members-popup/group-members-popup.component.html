@@ -48,6 +48,18 @@
     </div>
   </div>
 
+  <!-- Reply-Only Toggle (Owner Only) -->
+  <div class="reply-only-section" *ngIf="isOwner()">
+    <div class="reply-only-toggle" (click)="onToggleReplyOnly()">
+      <mat-icon>{{ isReplyOnly ? 'lock' : 'lock_open' }}</mat-icon>
+      <span>Reply only</span>
+      <div class="toggle-switch" [class.active]="isReplyOnly">
+        <div class="toggle-knob"></div>
+      </div>
+    </div>
+    <span class="reply-only-description">When enabled, only you can post new messages. Others can reply in threads.</span>
+  </div>
+
   <!-- Add Members Section -->
   <div class="add-members-section" *ngIf="canAddMembers()">
     <button

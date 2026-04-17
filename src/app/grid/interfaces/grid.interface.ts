@@ -34,6 +34,8 @@ export interface GridChannel {
   dm_user?: GridProfile;
   // For Groups, member user IDs
   member_ids?: string[];
+  // Reply-only mode - only owner can post top-level messages
+  is_reply_only?: boolean;
 }
 
 /**
@@ -70,6 +72,9 @@ export interface GridMessage {
   deleted_at?: string | null;
   is_edited: boolean;
   is_deleted: boolean;
+  // Resolved state
+  is_resolved?: boolean;
+  resolved_by_name?: string;
   // Slack user info for unmapped users
   slack_user_name?: string;
   slack_user_id?: string;
@@ -163,6 +168,7 @@ export interface GridCreateGroupRequest {
   user_id: string;      // Creator's user ID
   user_ids: string[];   // All member user IDs (including creator)
   name?: string;        // Optional group name
+  is_reply_only?: boolean; // Reply-only mode
 }
 
 /**
@@ -216,6 +222,7 @@ export type GridWsMessageType =
   | 'member_left'
   | 'unread_update'
   | 'read_receipt'
+  | 'message_resolved'
   | 'dm_notification'
   | 'channel_notification'
   | 'mention_notification'

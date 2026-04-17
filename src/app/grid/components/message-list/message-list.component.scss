@@ -448,6 +448,28 @@ $error-color: #e01e5a;
   }
 }
 
+// Resolved Badge
+.resolved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  border-radius: 4px;
+  color: #4caf50;
+  font-size: 12px;
+  font-weight: 500;
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: #4caf50;
+  }
+}
+
 // Thread Indicator
 .thread-indicator {
   display: inline-flex;

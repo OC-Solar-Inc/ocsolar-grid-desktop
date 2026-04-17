@@ -68,6 +68,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   groupSearchQuery = '';
   selectedGroupMembers: User[] = [];
   newGroupName = '';
+  newGroupReplyOnly = false;
   isCreatingGroup = false;
 
   // Message filter
@@ -832,6 +833,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   resetGroupForm(): void {
     this.selectedGroupMembers = [];
     this.newGroupName = '';
+    this.newGroupReplyOnly = false;
     this.groupSearchQuery = '';
   }
 
@@ -918,6 +920,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
       user_id: currentUserId,
       user_ids: userIds,
       name: this.newGroupName.trim() || undefined,
+      is_reply_only: this.newGroupReplyOnly || undefined,
     };
 
     console.log('Grid: Creating group with members:', userIds);

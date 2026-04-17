@@ -1286,6 +1286,42 @@ $online-green: #2eb67d;
   }
 }
 
+.group-popup-reply-only {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  flex-wrap: wrap;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+
+  mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    color: #1264a3;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  span {
+    font-size: 13px;
+    color: #1d1c1d;
+    font-weight: 500;
+  }
+
+  .reply-only-hint {
+    width: 100%;
+    padding-left: 28px;
+    font-size: 11px;
+    color: #616061;
+    font-weight: 400;
+  }
+}
+
 .group-popup-footer {
   display: flex;
   align-items: center;

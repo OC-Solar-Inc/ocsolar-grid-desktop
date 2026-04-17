@@ -656,6 +656,27 @@ $online-green: #2eb67d;
   }
 }
 
+// Reply-Only Banner
+.reply-only-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: var(--grid-chat-hover);
+  border-top: 1px solid var(--grid-chat-border);
+  color: var(--grid-chat-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--grid-chat-text-muted);
+  }
+}
+
 // No Channel Selected
 .no-channel-selected {
   flex: 1;

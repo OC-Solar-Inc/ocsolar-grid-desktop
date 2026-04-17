@@ -39,6 +39,7 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
 
   @Output() loadMore = new EventEmitter<void>();
   @Output() openThread = new EventEmitter<GridMessage>();
+  @Output() resolveToggled = new EventEmitter<GridMessage>();
 
   @ViewChild('scrollContainer') scrollContainer!: ElementRef<HTMLDivElement>;
 
@@ -172,6 +173,10 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     if (message.reply_count > 0 || !message.parent) {
       this.openThread.emit(message);
     }
+  }
+
+  toggleResolve(message: GridMessage): void {
+    this.resolveToggled.emit(message);
   }
 
   /**

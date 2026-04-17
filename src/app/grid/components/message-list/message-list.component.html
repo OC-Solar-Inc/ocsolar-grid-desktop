@@ -63,6 +63,12 @@
             <span class="edited-indicator" *ngIf="message.is_edited">(edited)</span>
           </div>
 
+          <!-- Resolved Badge -->
+          <div class="resolved-badge" *ngIf="message.is_resolved">
+            <mat-icon>check_circle</mat-icon>
+            <span>{{ message.resolved_by_name ? 'Resolved by ' + message.resolved_by_name : 'Resolved' }}</span>
+          </div>
+
           <!-- Message Attachments -->
           <div class="message-attachments" *ngIf="message.attachments && message.attachments.length > 0">
             <ng-container *ngFor="let attachment of message.attachments; trackBy: trackByAttachmentId">
@@ -144,6 +150,14 @@
               (click)="onOpenThread(message)"
             >
               <mat-icon>comment</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              class="action-button"
+              [matTooltip]="message.is_resolved ? 'Unresolve' : 'Mark as resolved'"
+              (click)="toggleResolve(message)"
+            >
+              <mat-icon>{{ message.is_resolved ? 'remove_done' : 'done' }}</mat-icon>
             </button>
           </div>
 

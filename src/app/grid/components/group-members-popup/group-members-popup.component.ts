@@ -36,9 +36,11 @@ export class GroupMembersPopupComponent implements OnInit {
   @Input() users: User[] = [];
   @Input() userMap = new Map<string, User>();
   @Input() currentUserId: string | null = null;
+  @Input() isReplyOnly = false;
 
   @Output() close = new EventEmitter<void>();
   @Output() membersChanged = new EventEmitter<void>();
+  @Output() replyOnlyToggled = new EventEmitter<void>();
 
   members: GridChannelMember[] = [];
   isLoading = true;
@@ -279,6 +281,21 @@ export class GroupMembersPopupComponent implements OnInit {
         this.cdr.markForCheck();
       },
     });
+  }
+
+  /**
+   * Check if current user is the group owner
+   */
+  isOwner(): boolean {
+    return this.currentUserRole === 'owner';
+  }
+
+  /**
+   * Toggle reply-only mode (owner only)
+   */
+  onToggleReplyOnly(): void {
+    if (!this.isOwner()) return;
+    this.replyOnlyToggled.emit();
   }
 
   /**
