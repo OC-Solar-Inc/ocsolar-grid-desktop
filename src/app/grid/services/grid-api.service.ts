@@ -281,9 +281,11 @@ export class GridApiService {
     channelId: string,
     cursor?: string,
     limit: number = 50
-  ): Observable<GridMessage[]> {
+  ): Observable<GridCursorPaginatedResponse<GridMessage>> {
     const userId = this.getCurrentUserId();
-    let params = new HttpParams().set('limit', limit.toString());
+    let params = new HttpParams()
+      .set('limit', limit.toString())
+      .set('paginated', 'true');
     if (userId) {
       params = params.set('user_id', userId);
     }
@@ -293,8 +295,8 @@ export class GridApiService {
     const url = `${this.baseUrl}/chat/channels/${channelId}/messages/`;
     console.log('Grid API: Fetching messages from:', url, 'params:', { user_id: userId, limit });
     return this.http
-      .get<GridMessage[]>(url, { params })
-      .pipe(catchError(this.handleError<GridMessage[]>('getMessages')));
+      .get<GridCursorPaginatedResponse<GridMessage>>(url, { params })
+      .pipe(catchError(this.handleError<GridCursorPaginatedResponse<GridMessage>>('getMessages')));
   }
 
   getThreadReplies(

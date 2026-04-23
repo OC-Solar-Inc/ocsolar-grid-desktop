@@ -48,6 +48,8 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   private previousTypingCount = 0;
   private previousLastMessageId: string | null = null;
   private userHasScrolledUp = false;
+  private preserveScrollPosition = false;
+  private savedScrollHeight = 0;
   private resizeObserver: ResizeObserver | null = null;
   private lastScrollHeight = 0;
 
@@ -99,8 +101,17 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       const lastMessageChanged = currentLastMessageId !== this.previousLastMessageId;
       const isInitialLoad = previousCount === 0;
 
-      // Scroll to bottom unless user has explicitly scrolled up to read history
-      if ((hasNewMessages || lastMessageChanged) && !this.userHasScrolledUp) {
+      // Detect older messages prepended: count grew but last message didn't change
+      const olderMessagesPrepended = hasNewMessages && !lastMessageChanged && !isInitialLoad;
+
+      if (olderMessagesPrepended) {
+        // Preserve scroll position when loading older messages
+        this.preserveScrollPosition = true;
+        if (this.scrollContainer) {
+          this.savedScrollHeight = this.scrollContainer.nativeElement.scrollHeight;
+        }
+      } else if ((hasNewMessages || lastMessageChanged) && !this.userHasScrolledUp) {
+        // Scroll to bottom for new messages at the end
         this.shouldScrollToBottom = true;
       }
 
@@ -125,7 +136,13 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   }
 
   ngAfterViewChecked(): void {
-    if (this.shouldScrollToBottom) {
+    if (this.preserveScrollPosition && this.scrollContainer) {
+      // Maintain scroll position after older messages are prepended
+      const element = this.scrollContainer.nativeElement;
+      const newScrollHeight = element.scrollHeight;
+      element.scrollTop = newScrollHeight - this.savedScrollHeight;
+      this.preserveScrollPosition = false;
+    } else if (this.shouldScrollToBottom) {
       this.scrollToBottomWithRetry();
       this.shouldScrollToBottom = false;
     }

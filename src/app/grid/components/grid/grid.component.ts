@@ -989,7 +989,8 @@ export class GridComponent implements OnInit, OnDestroy {
     console.log('Grid: Loading messages for channel:', channelId, 'user:', userDocId);
 
     this.gridApi.getMessages(channelId, cursor).subscribe({
-      next: (messages) => {
+      next: (response) => {
+        const messages = response.results || [];
         console.log('Grid: Received messages:', messages.length, messages);
 
         let loadedMessages: GridMessage[];
@@ -1021,9 +1022,9 @@ export class GridComponent implements OnInit, OnDestroy {
         // Clear buffer after merging
         this.messageBuffer = [];
 
-        // For now, no pagination support from API
-        this.hasMoreMessages = false;
-        this.nextCursor = null;
+        // Set pagination state from API response
+        this.hasMoreMessages = !!response.next_cursor;
+        this.nextCursor = response.next_cursor || null;
         this.isLoadingMessages = false;
         this.cdr.markForCheck();
 
