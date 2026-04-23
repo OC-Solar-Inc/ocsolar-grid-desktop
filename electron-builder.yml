@@ -60,3 +60,4 @@ publish:
   provider: github
   owner: OC-Solar-Inc
   repo: ocsolar-grid-desktop
+  releaseType: release
