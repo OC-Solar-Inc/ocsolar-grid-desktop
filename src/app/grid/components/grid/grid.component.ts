@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener, HostBinding, ChangeDetectionStrategy, ChangeDetectorRef, ViewChild, Inject, Output, EventEmitter, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subject, forkJoin } from 'rxjs';
+import { Subject, Subscription, forkJoin } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -112,6 +112,10 @@ export class GridComponent implements OnInit, OnDestroy {
   // Track recently sent message hashes to detect duplicates from WebSocket echo
   private recentMessageHashes = new Set<string>();
 
+  // In-flight message load; cancelled on channel switch so a slow response
+  // from the previous channel can't overwrite the new channel's messages.
+  private activeLoadMessages: Subscription | null = null;
+
   // Cleanup function for Electron power state listener
   private removePowerListener: (() => void) | null = null;
 
@@ -215,6 +219,7 @@ export class GridComponent implements OnInit, OnDestroy {
     // Signal all subscriptions to complete
     this.destroy$.next();
     this.destroy$.complete();
+    this.activeLoadMessages?.unsubscribe();
 
     // Cleanup power state and network listeners
     if (this.removePowerListener) {
@@ -1016,15 +1021,25 @@ export class GridComponent implements OnInit, OnDestroy {
    * Load messages for current channel
    */
   loadMessages(cursor?: string): void {
-    if (!this.currentChannel || this.isLoadingMessages) return;
+    if (!this.currentChannel) return;
+
+    // Cancel any in-flight load — its response would belong to a previous
+    // channel and must not overwrite the messages array for the new one.
+    this.activeLoadMessages?.unsubscribe();
 
     this.isLoadingMessages = true;
     const channelId = this.currentChannel.id;
     const userDocId = this.getCurrentUserDocId();
     console.log('Grid: Loading messages for channel:', channelId, 'user:', userDocId);
 
-    this.gridApi.getMessages(channelId, cursor).subscribe({
+    this.activeLoadMessages = this.gridApi.getMessages(channelId, cursor).subscribe({
       next: (response) => {
+        // Stale response — channel changed while the request was in flight.
+        if (this.currentChannel?.id !== channelId) {
+          console.warn('Grid: Discarding stale messages for', channelId, 'current is', this.currentChannel?.id);
+          return;
+        }
+
         const messages = response.results || [];
         console.log('Grid: Received messages:', messages.length, messages);
 
@@ -1070,6 +1085,7 @@ export class GridComponent implements OnInit, OnDestroy {
         }
       },
       error: (error) => {
+        if (this.currentChannel?.id !== channelId) return;
         console.error('Grid: Error loading messages:', error);
         // Clear buffer on error to prevent stale messages
         this.messageBuffer = [];
