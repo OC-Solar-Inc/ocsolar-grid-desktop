@@ -658,10 +658,10 @@ export class ChannelListComponent implements OnInit, OnDestroy {
     const unreadOnly = this.activityFilter === 'unread';
     this.gridApi.getActivity(unreadOnly, 50).subscribe({
       next: (items) => {
-        // Preserve real-time WebSocket items (DMs, etc.) not in API response
-        const apiIds = new Set(items.map(i => i.id));
+        // Preserve real-time WebSocket items not already in API response (dedup by message_id)
+        const apiMessageIds = new Set(items.map(i => i.message_id).filter(Boolean));
         const wsItems = this.activityItems.filter(i =>
-          i.id.startsWith('ws_') && !apiIds.has(i.id)
+          i.id.startsWith('ws_') && (!i.message_id || !apiMessageIds.has(i.message_id))
         );
 
         // Filter WS items by current filter
@@ -781,6 +781,11 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   }
 
   addActivityFromMention(channelId: string, message: any, mentionerId: string): void {
+    // Deduplicate: skip if this message is already in the activity list
+    if (message?.id && this.activityItems.some(item => item.message_id === message.id)) {
+      return;
+    }
+
     const newItem: GridActivityItem = {
       id: `ws_${Date.now()}`,
       mentioner_user_id: mentionerId,
