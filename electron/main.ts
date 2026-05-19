@@ -8,6 +8,11 @@ let isQuitting = false;
 
 const isDev = !app.isPackaged;
 
+if (isDev) {
+  // Keep dev state separate from the installed production app so both can run side-by-side
+  app.setPath('userData', path.join(app.getPath('appData'), 'ocsolar-grid-desktop-dev'));
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -149,8 +154,8 @@ function setupAutoUpdater(): void {
   autoUpdater.checkForUpdatesAndNotify();
 }
 
-// Single instance lock
-const gotTheLock = app.requestSingleInstanceLock();
+// Single instance lock (skipped in dev so a dev build can run alongside the installed production app)
+const gotTheLock = isDev ? true : app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   app.quit();
