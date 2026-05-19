@@ -318,6 +318,10 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       let unreadCount = 0;
       for (let i = this.messages.length - 1; i >= 0; i--) {
         const msg = this.messages[i];
+        // Skip replies — they don't render in the main feed
+        if (msg.parent) {
+          continue;
+        }
         // Skip own messages when counting unread
         if (msg.user_id === this.currentUserId) {
           continue;
@@ -337,6 +341,10 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
 
     for (let i = 0; i < this.messages.length; i++) {
       const message = this.messages[i];
+      // Replies belong in the thread panel only, never inline in the main feed
+      if (message.parent) {
+        continue;
+      }
       const messageDate = this.formatDateDivider(message.created_at);
 
       // Insert "New" divider before first unread message (never before own message)

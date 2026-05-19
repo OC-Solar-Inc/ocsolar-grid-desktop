@@ -348,15 +348,26 @@ export class GridComponent implements OnInit, OnDestroy {
         // Check if this is our own message coming back from the server
         const isOwnMessage = message.user_id === this.currentUserId;
         if (isOwnMessage && this.recentMessageHashes.has(this.getMessageHash(message))) {
-          // This is our own message broadcast back - replace optimistic message with real one
-          // Find and replace the pending message with matching content
-          const pendingIndex = this.messages.findIndex(
-            (m) => m.pending && m.content === message.content && m.user_id === message.user_id
-          );
-          if (pendingIndex !== -1) {
-            this.messages = this.messages.map((m, i) =>
-              i === pendingIndex ? { ...message, pending: false } : m
+          // This is our own message broadcast back - replace optimistic message with real one.
+          // Replies live in threadReplies; top-level messages live in messages.
+          if (message.parent) {
+            const pendingIndex = this.threadReplies.findIndex(
+              (m) => m.pending && m.content === message.content && m.user_id === message.user_id
             );
+            if (pendingIndex !== -1) {
+              this.threadReplies = this.threadReplies.map((m, i) =>
+                i === pendingIndex ? { ...message, pending: false } : m
+              );
+            }
+          } else {
+            const pendingIndex = this.messages.findIndex(
+              (m) => m.pending && m.content === message.content && m.user_id === message.user_id
+            );
+            if (pendingIndex !== -1) {
+              this.messages = this.messages.map((m, i) =>
+                i === pendingIndex ? { ...message, pending: false } : m
+              );
+            }
           }
           // Update channel info and return (don't add as new message)
           this.updateChannelLastMessage(message);
@@ -365,7 +376,20 @@ export class GridComponent implements OnInit, OnDestroy {
         }
 
         if (this.currentChannel && message.channel === this.currentChannel.id) {
-          if (this.isLoadingMessages) {
+          if (message.parent) {
+            // Reply: bump the parent's reply_count in the main feed and route
+            // to the open thread panel if it's showing this parent. Replies
+            // never go into this.messages — they belong in the thread panel.
+            this.messages = this.messages.map((m) =>
+              m.id === message.parent ? { ...m, reply_count: m.reply_count + 1 } : m
+            );
+            if (
+              this.threadParentMessage?.id === message.parent &&
+              !this.isMessageDuplicate(message, this.threadReplies)
+            ) {
+              this.threadReplies = [...this.threadReplies, message];
+            }
+          } else if (this.isLoadingMessages) {
             // Buffer messages during load to prevent race condition
             // where WebSocket messages arrive before HTTP load completes
             if (!this.isMessageDuplicate(message, this.messageBuffer)) {
@@ -708,8 +732,19 @@ export class GridComponent implements OnInit, OnDestroy {
 
       // If viewing this channel, add the message directly instead of incrementing unread
       if (isCurrentChannel) {
-        // Add message if not duplicate
-        if (!this.isMessageDuplicate(message)) {
+        if (message.parent) {
+          // Reply: bump parent reply_count and route into the open thread panel
+          // if it matches; never inject into the main feed array.
+          this.messages = this.messages.map((m) =>
+            m.id === message.parent ? { ...m, reply_count: m.reply_count + 1 } : m
+          );
+          if (
+            this.threadParentMessage?.id === message.parent &&
+            !this.isMessageDuplicate(message, this.threadReplies)
+          ) {
+            this.threadReplies = [...this.threadReplies, message];
+          }
+        } else if (!this.isMessageDuplicate(message)) {
           this.messages = [...this.messages, message];
         }
         this.gridWs.markRead(channelId, message.id);
@@ -1291,7 +1326,10 @@ export class GridComponent implements OnInit, OnDestroy {
 
     this.gridApi.getThreadReplies(this.threadParentMessage.id).subscribe({
       next: (replies) => {
-        this.threadReplies = replies.reverse();
+        // Oldest at top, newest at bottom (chronological)
+        this.threadReplies = [...replies].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
         this.cdr.markForCheck();
       },
       error: (error) => {
