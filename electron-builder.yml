@@ -9,6 +9,21 @@ directories:
 files:
   - dist-electron/**/*
   - dist/ocsolar-grid-desktop/**/*
+  # Playwright + bundled Chromium for the SCE submission helper.
+  # Without explicit includes electron-builder strips the dev-time
+  # browser binaries from the production bundle.  asarUnpack below
+  # makes the Chromium executable runnable from inside the .app.
+  - node_modules/playwright/**/*
+  - node_modules/playwright-core/**/*
+  - node_modules/pdf-lib/**/*
+
+asarUnpack:
+  # Chromium binaries can't be exec'd from inside app.asar — they
+  # have to live on the real filesystem.  Unpacking the entire
+  # playwright-core tree also covers the browser registry / shim
+  # scripts Playwright reads at startup.
+  - node_modules/playwright-core/**/*
+  - node_modules/playwright/**/*
 
 extraMetadata:
   main: dist-electron/main.js

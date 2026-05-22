@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, dialog, powerMonitor } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
+import { startLocalDriverServer } from './local-driver-server';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -172,6 +173,35 @@ if (!gotTheLock) {
     createWindow();
     createTray();
     setupAutoUpdater();
+
+    // Boot the SCE submission helper HTTP listener on localhost:9999.
+    // The OCSolar Portal's SCE submission panel POSTs payloads here
+    // to drive PowerClerk via Playwright in this user's local
+    // Chromium.  Bind failure is non-fatal — the rest of the app
+    // (chat, notifications) still works; the user just can't submit
+    // SCE applications until the next launch frees the port.
+    // In a packaged build, Chromium lives at
+    //   <app>/Contents/Resources/app.asar.unpacked/node_modules/playwright-core/.local-browsers
+    // — the unpacked sibling of app.asar.  Playwright's own resolver
+    // does NOT follow the asar fork, so we explicitly point at the
+    // unpacked path via PLAYWRIGHT_BROWSERS_PATH inside the driver
+    // subprocess.  In dev, the install lives in node_modules under
+    // the repo root and the default resolver finds it.
+    const playwrightBrowsersPath = app.isPackaged
+      ? path.join(
+          process.resourcesPath,
+          'app.asar.unpacked',
+          'node_modules',
+          'playwright-core',
+          '.local-browsers',
+        )
+      : undefined;
+    startLocalDriverServer({
+      appVersion: app.getVersion(),
+      playwrightBrowsersPath,
+    }).catch((err) => {
+      console.error('[main] local-driver-server failed to start:', err?.message);
+    });
 
     // Native notification handler
     ipcMain.on('show-notification', (_event, { title, body }: { title: string; body: string }) => {
