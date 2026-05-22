@@ -1,6 +1,6 @@
 {
   "name": "ocsolar-grid-desktop",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "OC Solar Grid Desktop - Standalone chat application",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -14,7 +14,7 @@
     "electron:build:mac": "npm run electron:build && electron-builder --mac",
     "electron:build:win": "npm run electron:build && electron-builder --win",
     "electron:start": "npm run electron:compile && electron .",
-    "postinstall": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium",
+    "postinstall": "cross-env PLAYWRIGHT_BROWSERS_PATH=0 playwright install chromium",
     "lint": "ng lint",
     "test": "ng test",
     "test:ci": "ng test --no-watch --no-progress --code-coverage --browsers ChromeHeadlessCI"
@@ -53,6 +53,7 @@
     "@typescript-eslint/eslint-plugin": "~6.21",
     "@typescript-eslint/parser": "~6.21",
     "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "electron": "^40.3.0",
     "electron-builder": "^26.7.0",
     "eslint": "~8.56",
