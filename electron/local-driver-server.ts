@@ -176,8 +176,14 @@ function startJob(payload: any): Job {
   if (process.env["PLAYWRIGHT_BROWSERS_PATH_OVERRIDE"]) {
     childEnv["PLAYWRIGHT_BROWSERS_PATH"] = process.env["PLAYWRIGHT_BROWSERS_PATH_OVERRIDE"];
   }
+  // cwd must be a real filesystem directory.  `path.dirname(driverPath)`
+  // points inside `app.asar` in packaged builds (a virtual filesystem
+  // that supports require() but not chdir()), which fails the spawn
+  // immediately with `ENOTDIR`.  The driver uses absolute paths for
+  // everything it reads/writes, so any real directory works — using
+  // tmpdir() since it's writable + always present cross-platform.
   const child = spawn(process.execPath, args, {
-    cwd: path.dirname(driverPath),
+    cwd: os.tmpdir(),
     env: childEnv,
     stdio: ["ignore", "pipe", "pipe"],
   });
