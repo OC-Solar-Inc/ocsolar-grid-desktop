@@ -37,6 +37,13 @@ jobs:
           echo "$ENV_TS" | base64 --decode > src/environments/environment.ts
           echo "$ENV_PROD_TS" | base64 --decode > src/environments/environment.prod.ts
 
+      - name: Write SCE PowerClerk credentials
+        env:
+          POWERCLERK_CREDENTIALS_TS: ${{ secrets.POWERCLERK_CREDENTIALS_TS }}
+        run: |
+          mkdir -p electron/sce-driver
+          printf '%s' "$POWERCLERK_CREDENTIALS_TS" | base64 --decode > electron/sce-driver/credentials.ts
+
       - name: Build Angular
         run: npm run build:prod
 
@@ -92,6 +99,14 @@ jobs:
           mkdir -p src/environments
           echo "$ENV_TS" | base64 --decode > src/environments/environment.ts
           echo "$ENV_PROD_TS" | base64 --decode > src/environments/environment.prod.ts
+
+      - name: Write SCE PowerClerk credentials
+        env:
+          POWERCLERK_CREDENTIALS_TS: ${{ secrets.POWERCLERK_CREDENTIALS_TS }}
+        shell: bash
+        run: |
+          mkdir -p electron/sce-driver
+          printf '%s' "$POWERCLERK_CREDENTIALS_TS" | base64 --decode > electron/sce-driver/credentials.ts
 
       - name: Build Angular
         run: npm run build:prod
