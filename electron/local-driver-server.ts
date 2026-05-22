@@ -158,6 +158,9 @@ function startJob(payload: any): Job {
     payloadPath,
     "--pause-on-error",
   ];
+  if (process.env["OCS_AUTH_STATE_PATH"]) {
+    args.push("--auth-state", process.env["OCS_AUTH_STATE_PATH"]);
+  }
   console.log(`[local-driver-server] starting job ${jobId}`);
   console.log(`  payload: ${payloadPath}`);
   console.log(`  driver:  ${driverPath}`);
@@ -285,14 +288,19 @@ export function startLocalDriverServer(opts: {
   port?: number;
   appVersion?: string;
   playwrightBrowsersPath?: string;
+  authStatePath?: string;
 } = {}): Promise<number> {
   const port = opts.port ?? DEFAULT_PORT;
   const appVersion = opts.appVersion ?? "unknown";
   const playwrightBrowsersPath = opts.playwrightBrowsersPath;
-  // Re-export the path so startJob() can read it without
+  const authStatePath = opts.authStatePath;
+  // Re-export through env so startJob() can read these without
   // re-threading the options object through.
   if (playwrightBrowsersPath) {
     process.env["PLAYWRIGHT_BROWSERS_PATH_OVERRIDE"] = playwrightBrowsersPath;
+  }
+  if (authStatePath) {
+    process.env["OCS_AUTH_STATE_PATH"] = authStatePath;
   }
 
   return new Promise((resolve, reject) => {

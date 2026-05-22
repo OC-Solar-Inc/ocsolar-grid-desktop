@@ -23,16 +23,36 @@ import {
   PtoSubmissionCell,
 } from "./payload-types";
 
-// PowerClerk credentials come from environment variables when the
-// driver runs inside the OC Solar Grid desktop app.  The Electron
-// main process injects them via spawn `env`; in dev a developer
-// exports OCS_POWERCLERK_USERNAME / OCS_POWERCLERK_PASSWORD in
-// their shell.  Phase 1: env-var-only.  Phase 3 wires a proper
-// credentials store inside the desktop app.
-const environment = {
-  powerClerkUsername: process.env["OCS_POWERCLERK_USERNAME"] || "",
-  powerClerkPassword: process.env["OCS_POWERCLERK_PASSWORD"] || "",
-};
+// PowerClerk credentials.  Resolution order:
+//   1. OCS_POWERCLERK_USERNAME / OCS_POWERCLERK_PASSWORD env vars
+//      (dev convenience — set in the shell that launches the app).
+//   2. `./credentials.ts` — a gitignored file shipped inside the
+//      packaged app.  In production a GitHub Actions secret
+//      injects this file at build time; for local builds developers
+//      copy `credentials.example.ts` → `credentials.ts` and fill
+//      in the OC Solar shared PowerClerk login.
+//
+// The require() is wrapped in a try so a missing file falls through
+// to the env-var path cleanly.  The driver caches `.powerclerk-
+// auth.json` on first successful login, so creds are only consulted
+// cold-start anyway.
+function loadCredentials(): { powerClerkUsername: string; powerClerkPassword: string } {
+  const envUser = process.env["OCS_POWERCLERK_USERNAME"];
+  const envPass = process.env["OCS_POWERCLERK_PASSWORD"];
+  if (envUser && envPass) {
+    return { powerClerkUsername: envUser, powerClerkPassword: envPass };
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { credentials } = require("./credentials") as {
+      credentials: { powerClerkUsername: string; powerClerkPassword: string };
+    };
+    return credentials;
+  } catch {
+    return { powerClerkUsername: "", powerClerkPassword: "" };
+  }
+}
+const environment = loadCredentials();
 import { FIELD_MAP, FieldMapEntry, FieldKind } from "./powerclerk-field-map";
 import {
   applyField,

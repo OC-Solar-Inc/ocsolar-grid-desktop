@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, dialog, powerMonitor } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
+import * as fs from 'fs';
 import { startLocalDriverServer } from './local-driver-server';
 
 let mainWindow: BrowserWindow | null = null;
@@ -196,9 +197,24 @@ if (!gotTheLock) {
           '.local-browsers',
         )
       : undefined;
+    // PowerClerk auth cache lives in userData/ so it survives
+    // auto-updates and stays writable.  The driver passes
+    // `--auth-state <this path>` and Playwright reads/writes
+    // session state there.  Falls under <userData>/sce/.
+    const authStatePath = path.join(
+      app.getPath('userData'),
+      'sce',
+      'powerclerk-auth.json',
+    );
+    try {
+      fs.mkdirSync(path.dirname(authStatePath), { recursive: true });
+    } catch (err) {
+      console.warn('[main] failed to create sce userData dir:', (err as Error)?.message);
+    }
     startLocalDriverServer({
       appVersion: app.getVersion(),
       playwrightBrowsersPath,
+      authStatePath,
     }).catch((err) => {
       console.error('[main] local-driver-server failed to start:', err?.message);
     });

@@ -7,6 +7,9 @@
 /out-tsc
 /bazel-out
 
+# SCE PowerClerk credentials — gitignored, CI injects via secret
+/electron/sce-driver/credentials.ts
+
 # Node
 /node_modules
 npm-debug.log
