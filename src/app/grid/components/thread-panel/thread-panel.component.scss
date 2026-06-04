@@ -1,11 +1,22 @@
 // Thread Panel Styles
 // Uses CSS custom properties from parent grid component for theming
 
-.thread-panel {
+// Host element must fill parent and constrain height
+:host {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.thread-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; // Critical for nested flex scrolling
   background: var(--grid-chat-bg, white);
+  overflow: hidden;
 }
 
 // Header
