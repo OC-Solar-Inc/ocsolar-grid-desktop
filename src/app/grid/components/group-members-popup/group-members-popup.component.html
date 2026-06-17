@@ -7,6 +7,52 @@
     </button>
   </div>
 
+  <!-- Group Name (creator/owner only) -->
+  <div class="group-name-section" *ngIf="isOwner()">
+    <ng-container *ngIf="!isEditingName">
+      <span class="group-name-label">Name</span>
+      <span class="group-name-value">{{ channelName || 'Unnamed group' }}</span>
+      <button
+        mat-icon-button
+        class="rename-button"
+        (click)="startRename()"
+        matTooltip="Rename group"
+      >
+        <mat-icon>edit</mat-icon>
+      </button>
+    </ng-container>
+
+    <ng-container *ngIf="isEditingName">
+      <input
+        type="text"
+        class="group-name-input"
+        [(ngModel)]="editableName"
+        maxlength="100"
+        placeholder="Group name"
+        (keydown.enter)="saveRename()"
+        (keydown.escape)="cancelRename()"
+      />
+      <button
+        mat-icon-button
+        class="rename-save"
+        [disabled]="isRenaming || !editableName.trim()"
+        (click)="saveRename()"
+        matTooltip="Save"
+      >
+        <mat-icon>{{ isRenaming ? 'sync' : 'check' }}</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        class="rename-cancel"
+        [disabled]="isRenaming"
+        (click)="cancelRename()"
+        matTooltip="Cancel"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </ng-container>
+  </div>
+
   <!-- Loading State -->
   <div class="loading-state" *ngIf="isLoading">
     <mat-icon class="spinning">sync</mat-icon>
@@ -126,5 +172,17 @@
         <span *ngIf="isSubmitting">Adding...</span>
       </button>
     </div>
+  </div>
+
+  <!-- Delete Group (creator/owner only) -->
+  <div class="delete-group-section" *ngIf="isOwner()">
+    <button
+      class="delete-group-button"
+      [disabled]="isDeleting"
+      (click)="confirmDelete()"
+    >
+      <mat-icon class="delete-group-icon" [class.spinning]="isDeleting">{{ isDeleting ? 'sync' : 'delete_outline' }}</mat-icon>
+      <span>{{ isDeleting ? 'Deleting...' : 'Delete group' }}</span>
+    </button>
   </div>
 </div>

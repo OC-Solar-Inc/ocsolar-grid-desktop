@@ -218,6 +218,7 @@ export type GridWsMessageType =
   | 'presence_update'
   | 'channel_created'
   | 'channel_updated'
+  | 'channel_deleted'
   | 'member_joined'
   | 'member_left'
   | 'unread_update'

@@ -41,6 +41,8 @@ export class GroupMembersPopupComponent implements OnInit {
   @Output() close = new EventEmitter<void>();
   @Output() membersChanged = new EventEmitter<void>();
   @Output() replyOnlyToggled = new EventEmitter<void>();
+  @Output() groupRenamed = new EventEmitter<string>();
+  @Output() groupDeleted = new EventEmitter<void>();
 
   members: GridChannelMember[] = [];
   isLoading = true;
@@ -49,6 +51,12 @@ export class GroupMembersPopupComponent implements OnInit {
   selectedUserIds: Set<string> = new Set();
   isSubmitting = false;
   currentUserRole: GridMemberRole | null = null;
+
+  // Rename state
+  isEditingName = false;
+  editableName = '';
+  isRenaming = false;
+  isDeleting = false;
 
   constructor(
     private gridApi: GridApiService,
@@ -130,28 +138,23 @@ export class GroupMembersPopupComponent implements OnInit {
    * Check if current user can remove a member
    */
   canRemoveMember(member: GridChannelMember): boolean {
-    if (!this.currentUserRole) return false;
+    // Only the group creator (owner) can remove members
+    if (!this.isOwner()) return false;
 
     // Cannot remove yourself via this UI (use Leave)
     if (member.user_id === this.currentUserId) return false;
 
-    // Cannot remove owner
+    // Cannot remove the owner
     if (member.role === 'owner') return false;
 
-    // Owner can remove anyone except themselves
-    if (this.currentUserRole === 'owner') return true;
-
-    // Admin can remove regular members only
-    if (this.currentUserRole === 'admin' && member.role === 'member') return true;
-
-    return false;
+    return true;
   }
 
   /**
-   * Check if current user can add members
+   * Check if current user can add members (creator/owner only)
    */
   canAddMembers(): boolean {
-    return this.currentUserRole === 'owner' || this.currentUserRole === 'admin' || this.currentUserRole === 'member';
+    return this.isOwner();
   }
 
   /**
@@ -288,6 +291,78 @@ export class GroupMembersPopupComponent implements OnInit {
    */
   isOwner(): boolean {
     return this.currentUserRole === 'owner';
+  }
+
+  /**
+   * Begin editing the group name (owner only)
+   */
+  startRename(): void {
+    if (!this.isOwner()) return;
+    this.editableName = this.channelName;
+    this.isEditingName = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Cancel renaming
+   */
+  cancelRename(): void {
+    this.isEditingName = false;
+    this.editableName = '';
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Save the new group name (owner only)
+   */
+  saveRename(): void {
+    if (!this.isOwner() || this.isRenaming) return;
+    const name = this.editableName.trim();
+    if (!name || name === this.channelName) {
+      this.cancelRename();
+      return;
+    }
+
+    this.isRenaming = true;
+    this.gridApi.renameGroup(this.channelId, name).subscribe({
+      next: (channel) => {
+        this.channelName = channel?.name || name;
+        this.isRenaming = false;
+        this.isEditingName = false;
+        this.groupRenamed.emit(this.channelName);
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error renaming group:', error);
+        this.isRenaming = false;
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  /**
+   * Delete the group (owner only), after confirmation
+   */
+  confirmDelete(): void {
+    if (!this.isOwner() || this.isDeleting) return;
+    const confirmed = window.confirm(
+      `Delete "${this.channelName || 'this group'}"? This permanently removes the group and its messages for everyone.`
+    );
+    if (!confirmed) return;
+
+    this.isDeleting = true;
+    this.gridApi.deleteGroup(this.channelId).subscribe({
+      next: () => {
+        this.isDeleting = false;
+        this.groupDeleted.emit();
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error deleting group:', error);
+        this.isDeleting = false;
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   /**

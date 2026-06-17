@@ -76,6 +76,14 @@ export class GridWebsocketService implements OnDestroy {
   private memberLeftSubject = new Subject<{ channelId: string; userId: string }>();
   public memberLeft$ = this.memberLeftSubject.asObservable();
 
+  // Group renamed (server → client)
+  private channelUpdatedSubject = new Subject<{ channelId: string; name?: string }>();
+  public channelUpdated$ = this.channelUpdatedSubject.asObservable();
+
+  // Group deleted (server → client)
+  private channelDeletedSubject = new Subject<{ channelId: string }>();
+  public channelDeleted$ = this.channelDeletedSubject.asObservable();
+
   private messageResolvedSubject = new Subject<{ message: GridMessage; channelId: string }>();
   public messageResolved$ = this.messageResolvedSubject.asObservable();
 
@@ -344,6 +352,21 @@ export class GridWebsocketService implements OnDestroy {
         this.memberLeftSubject.next({
           channelId: memberLeftData.channel_id,
           userId: memberLeftData.user_id,
+        });
+        break;
+
+      case 'channel_updated':
+        const channelUpdatedData = data as any;
+        this.channelUpdatedSubject.next({
+          channelId: channelUpdatedData.channel_id,
+          name: channelUpdatedData.name,
+        });
+        break;
+
+      case 'channel_deleted':
+        const channelDeletedData = data as any;
+        this.channelDeletedSubject.next({
+          channelId: channelDeletedData.channel_id,
         });
         break;
 
