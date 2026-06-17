@@ -14,9 +14,10 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { GridMessage, GridChannel } from '../../interfaces/grid.interface';
+import { GridMessage, GridChannel, GridMessageAttachment } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 import { GridMentionService, MentionSuggestion } from '../../services/grid-mention.service';
+import { GridFileUploadService } from '../../services/grid-file-upload.service';
 
 @Component({
   selector: 'lib-thread-panel',
@@ -51,6 +52,7 @@ export class ThreadPanelComponent implements OnChanges {
   constructor(
     private sanitizer: DomSanitizer,
     private mentionService: GridMentionService,
+    public fileUploadService: GridFileUploadService,
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -250,6 +252,34 @@ export class ThreadPanelComponent implements OnChanges {
 
   trackByReplyId(index: number, reply: GridMessage): string {
     return reply.id;
+  }
+
+  // ---- Attachment helpers (mirror message-list.component) ----
+
+  isImageAttachment(attachment: GridMessageAttachment): boolean {
+    return this.fileUploadService.isImageAttachment(attachment);
+  }
+
+  getAttachmentIcon(attachment: GridMessageAttachment): string {
+    return this.fileUploadService.getFileIcon(attachment.file_type);
+  }
+
+  formatFileSize(bytes: number): string {
+    return this.fileUploadService.formatFileSize(bytes);
+  }
+
+  getImageMaxWidth(attachment: GridMessageAttachment): number {
+    return this.fileUploadService.getImageMaxWidth(attachment, 400);
+  }
+
+  trackByAttachmentId(index: number, attachment: GridMessageAttachment): string {
+    return attachment.id;
+  }
+
+  onDownloadClick(event: Event, attachment: GridMessageAttachment): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.fileUploadService.downloadAttachment(attachment.id, attachment.original_filename);
   }
 
   /**

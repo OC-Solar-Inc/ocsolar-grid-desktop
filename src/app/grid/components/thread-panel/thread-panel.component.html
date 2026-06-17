@@ -35,7 +35,62 @@
           <span class="sender-name">{{ getDisplayName(parentMessage) }}</span>
           <span class="message-time">{{ formatDate(parentMessage.created_at) }}</span>
         </div>
-        <div class="message-text" [innerHTML]="formatMessageContent(parentMessage.content)"></div>
+        <div class="message-text" *ngIf="parentMessage.content" [innerHTML]="formatMessageContent(parentMessage.content)"></div>
+
+        <!-- Parent Message Attachments -->
+        <div class="message-attachments" *ngIf="parentMessage.attachments && parentMessage.attachments.length > 0">
+          <ng-container *ngFor="let attachment of parentMessage.attachments; trackBy: trackByAttachmentId">
+            <div *ngIf="isImageAttachment(attachment)" class="attachment-image-container">
+              <a
+                class="attachment-image"
+                [href]="attachment.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                [matTooltip]="'Open ' + attachment.original_filename"
+              >
+                <img
+                  [src]="attachment.url"
+                  [alt]="attachment.original_filename"
+                  [style.max-width.px]="getImageMaxWidth(attachment)"
+                  loading="lazy"
+                />
+              </a>
+              <button
+                mat-icon-button
+                class="image-download-button"
+                (click)="onDownloadClick($event, attachment)"
+                [matTooltip]="'Download ' + attachment.original_filename"
+              >
+                <mat-icon>download</mat-icon>
+              </button>
+            </div>
+
+            <div *ngIf="!isImageAttachment(attachment)" class="attachment-file">
+              <a
+                [href]="attachment.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="file-preview-link"
+                [matTooltip]="'Open ' + attachment.original_filename"
+              >
+                <mat-icon class="file-icon">{{ getAttachmentIcon(attachment) }}</mat-icon>
+                <div class="file-info">
+                  <span class="file-name">{{ attachment.original_filename }}</span>
+                  <span class="file-size">{{ formatFileSize(attachment.file_size) }}</span>
+                </div>
+              </a>
+              <button
+                mat-icon-button
+                class="download-button"
+                (click)="onDownloadClick($event, attachment)"
+                [matTooltip]="'Download ' + attachment.original_filename"
+              >
+                <mat-icon>download</mat-icon>
+              </button>
+            </div>
+          </ng-container>
+        </div>
+
         <div class="reply-count" *ngIf="replies.length > 0">
           {{ replies.length }} {{ replies.length === 1 ? 'reply' : 'replies' }}
         </div>
@@ -74,9 +129,63 @@
             <span class="sender-name">{{ getDisplayName(reply) }}</span>
             <span class="message-time">{{ formatTime(reply.created_at) }}</span>
           </div>
-          <div class="message-text">
+          <div class="message-text" *ngIf="reply.content">
             <span [innerHTML]="formatMessageContent(reply.content)"></span>
             <span class="edited-indicator" *ngIf="reply.is_edited">(edited)</span>
+          </div>
+
+          <!-- Reply Attachments -->
+          <div class="message-attachments" *ngIf="reply.attachments && reply.attachments.length > 0">
+            <ng-container *ngFor="let attachment of reply.attachments; trackBy: trackByAttachmentId">
+              <div *ngIf="isImageAttachment(attachment)" class="attachment-image-container">
+                <a
+                  class="attachment-image"
+                  [href]="attachment.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [matTooltip]="'Open ' + attachment.original_filename"
+                >
+                  <img
+                    [src]="attachment.url"
+                    [alt]="attachment.original_filename"
+                    [style.max-width.px]="getImageMaxWidth(attachment)"
+                    loading="lazy"
+                  />
+                </a>
+                <button
+                  mat-icon-button
+                  class="image-download-button"
+                  (click)="onDownloadClick($event, attachment)"
+                  [matTooltip]="'Download ' + attachment.original_filename"
+                >
+                  <mat-icon>download</mat-icon>
+                </button>
+              </div>
+
+              <div *ngIf="!isImageAttachment(attachment)" class="attachment-file">
+                <a
+                  [href]="attachment.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="file-preview-link"
+                  [matTooltip]="'Open ' + attachment.original_filename"
+                >
+                  <mat-icon class="file-icon">{{ getAttachmentIcon(attachment) }}</mat-icon>
+                  <div class="file-info">
+                    <span class="file-name">{{ attachment.original_filename }}</span>
+                    <span class="file-size">{{ formatFileSize(attachment.file_size) }}</span>
+                  </div>
+                </a>
+                <button
+                  mat-icon-button
+                  class="download-button"
+                  (click)="onDownloadClick($event, attachment)"
+                  [matTooltip]="'Download ' + attachment.original_filename"
+                >
+                  <mat-icon>download</mat-icon>
+                </button>
+              </div>
+            </ng-container>
           </div>
         </div>
       </div>
