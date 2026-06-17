@@ -129,6 +129,10 @@
   .rename-button,
   .rename-save,
   .rename-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     width: 28px;
     height: 28px;
     line-height: 28px;
@@ -139,6 +143,11 @@
       font-size: 16px;
       width: 16px;
       height: 16px;
+      line-height: 16px;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     &:hover:not(:disabled) {
@@ -289,6 +298,10 @@
 }
 
 .remove-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   width: 28px;
   height: 28px;
   line-height: 28px;
@@ -300,6 +313,11 @@
     font-size: 16px;
     width: 16px;
     height: 16px;
+    line-height: 16px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   &:hover {
