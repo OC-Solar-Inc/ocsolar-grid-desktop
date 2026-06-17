@@ -623,6 +623,52 @@ export class GridComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         }
       });
+
+    // Group renamed by another user - update sidebar + header in real time
+    this.gridWs.channelUpdated$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ channelId, name }) => {
+        if (name) {
+          this.applyChannelRename(channelId, name);
+        }
+      });
+
+    // Group deleted by its owner - remove from sidebar, close if open
+    this.gridWs.channelDeleted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ channelId }) => {
+        this.applyChannelRemoval(channelId);
+      });
+  }
+
+  /**
+   * Update a channel's name locally (sidebar list + current header).
+   */
+  private applyChannelRename(channelId: string, name: string): void {
+    this.channels = this.channels.map((c) =>
+      c.id === channelId ? { ...c, name } : c
+    );
+    if (this.currentChannel?.id === channelId) {
+      this.currentChannel = { ...this.currentChannel, name };
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Remove a channel locally. If it's currently open, close it and show the sidebar.
+   */
+  private applyChannelRemoval(channelId: string): void {
+    this.channels = this.channels.filter((c) => c.id !== channelId);
+    if (this.currentChannel?.id === channelId) {
+      this.gridWs.leaveChannel(channelId);
+      this.currentChannel = null;
+      this.messages = [];
+      this.isMembersPopupOpen = false;
+      this.closeThreadPanel();
+      this.isFilesPanelOpen = false;
+      this.isSidebarOpen = true;
+    }
+    this.cdr.markForCheck();
   }
 
   /**
@@ -1269,6 +1315,22 @@ export class GridComponent implements OnInit, OnDestroy {
     // Refresh the current channel's member data if needed
     // The popup handles its own member list refresh
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Handle group renamed event from the popup (current user is the owner)
+   */
+  onGroupRenamed(name: string): void {
+    if (!this.currentChannel) return;
+    this.applyChannelRename(this.currentChannel.id, name);
+  }
+
+  /**
+   * Handle group deleted event from the popup (current user is the owner)
+   */
+  onGroupDeleted(): void {
+    if (!this.currentChannel) return;
+    this.applyChannelRemoval(this.currentChannel.id);
   }
 
   /**

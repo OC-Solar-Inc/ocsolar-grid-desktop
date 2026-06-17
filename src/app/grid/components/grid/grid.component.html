@@ -126,7 +126,9 @@
               [isReplyOnly]="currentChannel.is_reply_only || false"
               (close)="closeMembersPopup()"
               (membersChanged)="onMembersChanged()"
-              (replyOnlyToggled)="onReplyOnlyToggled()">
+              (replyOnlyToggled)="onReplyOnlyToggled()"
+              (groupRenamed)="onGroupRenamed($event)"
+              (groupDeleted)="onGroupDeleted()">
             </lib-group-members-popup>
           </ng-container>
         </div>

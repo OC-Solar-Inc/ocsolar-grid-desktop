@@ -84,6 +84,115 @@
   }
 }
 
+.group-name-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--grid-chat-border, rgba(255, 255, 255, 0.1));
+
+  .group-name-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--grid-chat-text-muted, #9a9a9a);
+    flex-shrink: 0;
+  }
+
+  .group-name-value {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--grid-chat-text, #e5e5e5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .group-name-input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border: 1px solid var(--grid-chat-border, rgba(255, 255, 255, 0.1));
+    border-radius: 4px;
+    background: var(--grid-chat-input-bg, rgba(0, 0, 0, 0.2));
+    color: var(--grid-chat-text, #e5e5e5);
+    font-size: 14px;
+
+    &:focus {
+      outline: none;
+      border-color: var(--grid-chat-accent, #4a9eff);
+    }
+  }
+
+  .rename-button,
+  .rename-save,
+  .rename-cancel {
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    flex-shrink: 0;
+    color: var(--grid-chat-text-muted, #9a9a9a);
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    &:hover:not(:disabled) {
+      color: var(--grid-chat-text, #e5e5e5);
+      background: var(--grid-chat-hover, rgba(255, 255, 255, 0.05));
+    }
+  }
+
+  .rename-save:hover:not(:disabled) {
+    color: var(--grid-chat-accent, #4a9eff);
+  }
+}
+
+.delete-group-section {
+  border-top: 1px solid var(--grid-chat-border, rgba(255, 255, 255, 0.1));
+  padding: 8px 16px 12px;
+}
+
+.delete-group-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(255, 82, 82, 0.4);
+  border-radius: 4px;
+  background: transparent;
+  color: #ff5252;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 82, 82, 0.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .delete-group-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+
+    &.spinning {
+      animation: spin 1s linear infinite;
+    }
+  }
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }

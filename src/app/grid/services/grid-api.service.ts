@@ -273,6 +273,30 @@ export class GridApiService {
       .pipe(catchError(this.handleError<{ removed: string[]; errors: any[] }>('removeChannelMembers')));
   }
 
+  /**
+   * Rename a group chat (group owner/creator only)
+   */
+  renameGroup(channelId: string, name: string): Observable<GridChannel> {
+    const userId = this.getCurrentUserId();
+    return this.http
+      .post<GridChannel>(`${this.baseUrl}/chat/channels/${channelId}/rename/`, {
+        user_id: userId,
+        name,
+      })
+      .pipe(catchError(this.handleError<GridChannel>('renameGroup')));
+  }
+
+  /**
+   * Delete a group chat (group owner/creator only)
+   */
+  deleteGroup(channelId: string): Observable<{ status: string; channel: string }> {
+    const userId = this.getCurrentUserId();
+    const params = new HttpParams().set('user_id', userId || '');
+    return this.http
+      .delete<{ status: string; channel: string }>(`${this.baseUrl}/chat/channels/${channelId}/`, { params })
+      .pipe(catchError(this.handleError<{ status: string; channel: string }>('deleteGroup')));
+  }
+
   // =====================
   // Message Operations
   // =====================
