@@ -1402,9 +1402,14 @@ export class GridComponent implements OnInit, OnDestroy {
    */
   loadThreadReplies(): void {
     if (!this.threadParentMessage) return;
+    const parentId = this.threadParentMessage.id;
 
-    this.gridApi.getThreadReplies(this.threadParentMessage.id).subscribe({
+    this.gridApi.getThreadReplies(parentId).subscribe({
       next: (replies) => {
+        // Discard stale responses: the user may have opened a different
+        // thread (or closed the panel) while this request was in flight
+        if (this.threadParentMessage?.id !== parentId) return;
+
         // Oldest at top, newest at bottom (chronological)
         this.threadReplies = [...replies].sort(
           (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()

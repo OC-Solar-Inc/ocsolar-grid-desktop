@@ -231,6 +231,7 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
   private uploadSubscriptions: Subscription[] = [];
   private draftSaveSubject = new Subject<void>();
   private isRestoringDraft = false;
+  private restoreDraftSeq = 0;
 
   constructor(
     public fileUploadService: GridFileUploadService,
@@ -524,8 +525,10 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
         status: 'uploading',
       });
 
-      // Start upload
-      const upload$ = this.fileUploadService.uploadFile(this.channelId, file);
+      // Start upload — capture the channel so a completion that arrives
+      // after the user switches channels doesn't attach to the wrong composer
+      const uploadChannelId = this.channelId;
+      const upload$ = this.fileUploadService.uploadFile(uploadChannelId, file);
       const subscription = upload$.subscribe({
         next: (progress) => {
           // Update existing progress entry
@@ -538,11 +541,24 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
 
           // If complete, move to completed attachments
           if (progress.status === 'complete' && progress.attachment) {
-            this.completedAttachments.push(progress.attachment);
             // Remove from pending
             this.pendingUploads = this.pendingUploads.filter(
               (u) => u.file !== file
             );
+
+            if (uploadChannelId !== this.channelId) {
+              // User switched channels mid-upload — stash the attachment in
+              // the origin channel's draft instead of the current composer
+              const draft = this.draftService.getDraft(uploadChannelId);
+              this.draftService.saveDraft(
+                uploadChannelId,
+                draft?.messageContent || '',
+                [...(draft?.attachments || []), progress.attachment]
+              );
+              return;
+            }
+
+            this.completedAttachments.push(progress.attachment);
             // Save draft with new attachment
             this.triggerDraftSave();
           }
@@ -900,6 +916,11 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private restoreDraft(channelId: string): void {
+    // Guard against overlapping restores: if the emission arrives after the
+    // user has switched channels again, it must not populate the new
+    // channel's composer with the old channel's draft
+    const restoreSeq = ++this.restoreDraftSeq;
+
     // Clear current state first
     this.messageContent = '';
     this.completedAttachments = [];
@@ -916,6 +937,9 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
     // Use validation to check if attachments still exist
     this.draftService.getDraftWithValidation(channelId).subscribe({
       next: (draft) => {
+        if (restoreSeq !== this.restoreDraftSeq || channelId !== this.channelId) {
+          return;
+        }
         if (draft) {
           this.messageContent = draft.messageContent;
           this.completedAttachments = draft.attachments;
@@ -928,6 +952,9 @@ export class MessageInputComponent implements OnInit, OnChanges, OnDestroy {
         this.isRestoringDraft = false;
       },
       error: () => {
+        if (restoreSeq !== this.restoreDraftSeq) {
+          return;
+        }
         this.isRestoringDraft = false;
       },
     });
