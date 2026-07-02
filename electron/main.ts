@@ -10,6 +10,10 @@ let isQuitting = false;
 
 const isDev = !app.isPackaged;
 
+// Windows requires the AppUserModelID to match the installer shortcut's appId,
+// otherwise new Notification().show() silently does nothing in packaged builds.
+app.setAppUserModelId('com.ocsolar.grid');
+
 if (isDev) {
   // Keep dev state separate from the installed production app so both can run side-by-side
   app.setPath('userData', path.join(app.getPath('appData'), 'ocsolar-grid-desktop-dev'));
@@ -28,6 +32,10 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: false, // Disable CORS for API calls to ocsolarprocess.com
+      // Keep timers running at full speed while hidden/minimized so the
+      // WebSocket heartbeat and reconnect backoff aren't throttled —
+      // notifications depend on the socket staying alive in the background
+      backgroundThrottling: false,
     },
     icon: path.join(__dirname, '..', 'src', 'assets', 'icons', 'icon.png'),
     show: false,

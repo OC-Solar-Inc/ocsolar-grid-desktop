@@ -28,7 +28,6 @@ export class GridWebsocketService implements OnDestroy {
   private socket: WebSocket | null = null;
   private wsUrl: string;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
   private reconnectDelay = 1000;
   private maxReconnectDelay = 30000;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
@@ -96,8 +95,8 @@ export class GridWebsocketService implements OnDestroy {
   // Track joined channels
   private joinedChannels = new Set<string>();
 
-  // Track disconnect reason to prevent auto-reconnect on idle disconnect
-  private disconnectReason: 'user' | 'idle' | 'server' | null = null;
+  // Track disconnect reason to prevent auto-reconnect on intentional disconnect
+  private disconnectReason: 'user' | null = null;
 
   constructor(
     @Inject(GRID_CONFIG) private config: GridConfig,
@@ -166,7 +165,10 @@ export class GridWebsocketService implements OnDestroy {
         this.stopPingPong();
         this.connectionStateSubject.next('disconnected');
 
-        if (event.code !== 1000 && this.disconnectReason !== 'idle') {
+        // Always reconnect unless the client itself chose to disconnect.
+        // Servers and proxies sometimes close cleanly (code 1000) during
+        // restarts — notifications depend on the socket, so never stay down.
+        if (this.disconnectReason !== 'user') {
           this.attemptReconnect();
         }
 
@@ -191,20 +193,6 @@ export class GridWebsocketService implements OnDestroy {
 
     this.connectionStateSubject.next('disconnected');
     this.joinedChannels.clear();
-  }
-
-  disconnectForIdle(reason: string): void {
-    this.disconnectReason = 'idle';
-    this.stopPingPong();
-    this.clearReconnectTimeout();
-
-    if (this.socket) {
-      this.socket.close(1000, reason);
-      this.socket = null;
-    }
-
-    this.connectionStateSubject.next('disconnected');
-    console.log('Grid WebSocket: Disconnected for idle, preserving', this.joinedChannels.size, 'channels');
   }
 
   private handleMessage(data: GridWsMessage): void {
@@ -511,20 +499,15 @@ export class GridWebsocketService implements OnDestroy {
   }
 
   private attemptReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnect attempts reached for Grid WebSocket');
-      this.socket = null;
-      this.connectionStateSubject.next('disconnected');
-      this.errorSubject.next({ error: 'Unable to reconnect to chat server' });
-      return;
-    }
-
+    // Never give up — notifications depend on this socket, so keep retrying
+    // forever with capped exponential backoff (like Slack/Discord).
     this.connectionStateSubject.next('reconnecting');
     this.reconnectAttempts++;
 
     const jitter = Math.random() * 1000;
+    const exponent = Math.min(this.reconnectAttempts - 1, 5);
     const delay = Math.min(
-      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) + jitter,
+      this.reconnectDelay * Math.pow(2, exponent) + jitter,
       this.maxReconnectDelay
     );
 
@@ -548,6 +531,12 @@ export class GridWebsocketService implements OnDestroy {
     this.disconnectReason = null;
 
     if (this.socket) {
+      // Detach handlers so the old socket's onclose doesn't schedule a
+      // second, competing reconnect cycle alongside the connect() below
+      this.socket.onopen = null;
+      this.socket.onmessage = null;
+      this.socket.onerror = null;
+      this.socket.onclose = null;
       try { this.socket.close(1000, 'Force reconnect'); } catch { /* ignore */ }
       this.socket = null;
     }

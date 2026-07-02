@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ThreadPanelComponent } from './thread-panel.component';
 import { GridMentionService } from '../../services/grid-mention.service';
+import { GridFileUploadService } from '../../services/grid-file-upload.service';
 import { User } from '../../interfaces/user';
 
 describe('ThreadPanelComponent', () => {
@@ -15,7 +16,9 @@ describe('ThreadPanelComponent', () => {
 
     const sanitizer = TestBed.inject(DomSanitizer);
     const mentionService = TestBed.inject(GridMentionService);
-    component = new ThreadPanelComponent(sanitizer, mentionService);
+    // Stub — these tests only exercise formatMessageContent, which never touches uploads
+    const fileUploadService = {} as GridFileUploadService;
+    component = new ThreadPanelComponent(sanitizer, mentionService, fileUploadService);
   });
 
   // Helper to unwrap SafeHtml to a plain string

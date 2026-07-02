@@ -1,10 +1,17 @@
 import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Subject, Subscription } from 'rxjs';
 import { GridWebsocketService } from './grid-websocket.service';
-import { GridNotificationService } from './grid-notification.service';
 
 export type IdleState = 'active' | 'idle' | 'hidden';
 
+/**
+ * Tracks user activity and window visibility to drive presence status
+ * (active / idle / hidden). The WebSocket is NEVER disconnected on idle —
+ * desktop notifications depend on it staying alive while the app is
+ * backgrounded or minimized, like Slack/Discord. This service instead acts
+ * as a reconnect safety net: whenever the user returns (activity or the
+ * window becoming visible) and the socket is down, it reconnects.
+ */
 @Injectable()
 export class IdleConnectionService implements OnDestroy {
   private readonly IDLE_TIMEOUT = 5 * 60 * 1000;
@@ -15,7 +22,6 @@ export class IdleConnectionService implements OnDestroy {
   private lastActivityTime = Date.now();
   private isUserActive = true;
   private isTabVisible = true;
-  private wasDisconnectedDueToIdle = false;
   private isInitialized = false;
   private throttleTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -30,7 +36,7 @@ export class IdleConnectionService implements OnDestroy {
   private boundActivityHandler: () => void;
   private boundVisibilityHandler: () => void;
 
-  constructor(private ngZone: NgZone, private gridNotification: GridNotificationService) {
+  constructor(private ngZone: NgZone) {
     this.boundActivityHandler = this.onActivity.bind(this);
     this.boundVisibilityHandler = this.handleVisibilityChange.bind(this);
   }
@@ -44,7 +50,6 @@ export class IdleConnectionService implements OnDestroy {
     this.isInitialized = true;
     this.isTabVisible = !document.hidden;
     this.isUserActive = true;
-    this.wasDisconnectedDueToIdle = false;
 
     console.log('IdleConnectionService: Initializing, tab visible:', this.isTabVisible);
 
@@ -73,11 +78,9 @@ export class IdleConnectionService implements OnDestroy {
     this.destroyed$.complete();
     this.gridWs = null;
     this.isInitialized = false;
-    this.wasDisconnectedDueToIdle = false;
   }
 
   getIdleState(): IdleState { return this.idleStateSubject.value; }
-  isDisconnectedDueToIdle(): boolean { return this.wasDisconnectedDueToIdle; }
 
   private onActivity(): void {
     if (this.throttleTimeout) return;
@@ -88,11 +91,9 @@ export class IdleConnectionService implements OnDestroy {
   private handleActivityDetected(): void {
     this.lastActivityTime = Date.now();
     this.isUserActive = true;
+    if (this.isTabVisible) { this.updateIdleState('active'); }
     this.resetIdleTimer();
-    if (this.wasDisconnectedDueToIdle && this.isTabVisible) {
-      console.log('IdleConnectionService: User activity detected, reconnecting...');
-      this.reconnect();
-    }
+    this.reconnectIfDown();
   }
 
   private resetIdleTimerFromMessage(): void {
@@ -110,11 +111,10 @@ export class IdleConnectionService implements OnDestroy {
   }
 
   private handleIdleTimeout(): void {
-    if (!this.gridWs) return;
-    console.log('IdleConnectionService: User idle for 5 minutes, disconnecting...');
+    // Presence only — the WebSocket stays connected so notifications keep working
+    console.log('IdleConnectionService: User idle for 5 minutes, marking presence idle (connection stays alive)');
     this.isUserActive = false;
     this.updateIdleState('idle');
-    this.disconnectForIdle('User idle timeout');
   }
 
   private handleVisibilityChange(): void {
@@ -128,33 +128,31 @@ export class IdleConnectionService implements OnDestroy {
       this.updateIdleState('hidden');
       // Keep WebSocket alive when hidden so DM/channel/mention notifications
       // can still be received and pushed as desktop notifications
-      console.log('IdleConnectionService: Tab hidden, keeping connection alive for notifications');
     } else if (!wasVisible) {
       this.updateIdleState(this.isUserActive ? 'active' : 'idle');
-      if (this.wasDisconnectedDueToIdle) {
-        console.log('IdleConnectionService: Tab visible again, reconnecting...');
-        this.reconnect();
-      }
       this.resetIdleTimer();
+      // Safety net: if the socket died while we were hidden (network blip,
+      // sleep, server restart), reconnect immediately instead of waiting out
+      // the current backoff delay
+      this.reconnectIfDown(true);
     }
   }
 
-  private disconnectForIdle(reason: string): void {
+  /**
+   * Reconnect the WebSocket if it's down. With `immediate`, an in-progress
+   * backoff wait is cut short via forceReconnect; otherwise only a fully
+   * disconnected socket is revived (so we don't stomp an in-flight attempt
+   * on every mouse move).
+   */
+  private reconnectIfDown(immediate = false): void {
     if (!this.gridWs) return;
-    if (!this.gridWs.isConnected()) { this.wasDisconnectedDueToIdle = true; return; }
-    console.log('IdleConnectionService: Disconnecting for idle:', reason);
-    this.wasDisconnectedDueToIdle = true;
-    this.gridWs.disconnectForIdle(reason);
-  }
+    const state = this.gridWs.getConnectionState();
+    if (state === 'connected' || state === 'connecting') return;
 
-  private reconnect(): void {
-    if (!this.gridWs) return;
-    if (!this.isTabVisible) { console.log('IdleConnectionService: Tab hidden, skipping reconnect'); return; }
-    if (this.gridWs.isConnected()) { this.wasDisconnectedDueToIdle = false; this.updateIdleState('active'); return; }
-    console.log('IdleConnectionService: Reconnecting...');
-    this.wasDisconnectedDueToIdle = false;
-    this.updateIdleState('active');
-    this.ngZone.run(() => { this.gridWs!.connect(); });
+    if (state === 'disconnected' || (immediate && state === 'reconnecting')) {
+      console.log('IdleConnectionService: Socket down on user return, reconnecting...');
+      this.ngZone.run(() => { this.gridWs!.forceReconnect(); });
+    }
   }
 
   private updateIdleState(state: IdleState): void {

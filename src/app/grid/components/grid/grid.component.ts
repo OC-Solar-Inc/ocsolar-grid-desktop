@@ -144,7 +144,8 @@ export class GridComponent implements OnInit, OnDestroy {
     this.loadChannels();
 
     // Initialize idle monitoring and connect WebSocket
-    // IdleConnectionService manages connection lifecycle based on user activity
+    // IdleConnectionService tracks activity/visibility for presence status and
+    // reconnects the socket when the user returns; it never disconnects on idle
     this.idleConnection.initialize(this.gridWs);
     this.gridWs.connect();
 
