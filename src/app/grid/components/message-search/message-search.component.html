@@ -1,0 +1,61 @@
+<div class="search-backdrop" (click)="onBackdropClick($event)">
+  <div class="search-panel">
+    <!-- Input -->
+    <div class="search-input-row">
+      <mat-icon class="search-leading-icon">search</mat-icon>
+      <input
+        #searchInput
+        class="search-input"
+        type="text"
+        placeholder="Search messages…"
+        [ngModel]="query"
+        (ngModelChange)="onQueryChange($event)"
+        autofocus
+      />
+      <button *ngIf="query" class="search-clear" (click)="clear()" aria-label="Clear">
+        <mat-icon>close</mat-icon>
+      </button>
+      <button class="search-close" (click)="close()" aria-label="Close search">
+        <span>Esc</span>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="search-body">
+      <div class="search-status" *ngIf="isSearching">
+        <mat-spinner diameter="20"></mat-spinner>
+        <span>Searching…</span>
+      </div>
+
+      <div class="search-hint" *ngIf="!isSearching && !hasSearched">
+        <mat-icon>search</mat-icon>
+        <span>Type at least 2 characters to search across your channels.</span>
+      </div>
+
+      <div class="search-empty" *ngIf="!isSearching && hasSearched && results.length === 0">
+        <mat-icon>search_off</mat-icon>
+        <span>No messages found for “{{ query }}”.</span>
+      </div>
+
+      <ul class="search-results" *ngIf="!isSearching && results.length > 0">
+        <li
+          *ngFor="let message of results; trackBy: trackByMessageId"
+          class="search-result"
+          (click)="selectResult(message)"
+        >
+          <div class="result-meta">
+            <span class="result-sender">{{ senderName(message) }}</span>
+            <span class="result-channel">{{ channelName(message) }}</span>
+            <span class="result-time">{{ formatTime(message.created_at) }}</span>
+          </div>
+          <div class="result-snippet">
+            <ng-container *ngFor="let part of highlightedSnippet(message)">
+              <mark *ngIf="part.match">{{ part.text }}</mark>
+              <span *ngIf="!part.match">{{ part.text }}</span>
+            </ng-container>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>

@@ -86,6 +86,18 @@ export interface GridMessage {
   temp_id?: string;
   // File attachments
   attachments?: GridMessageAttachment[];
+  // Emoji reactions, aggregated per emoji
+  reactions?: GridMessageReaction[];
+}
+
+/**
+ * Aggregated emoji reaction on a message.
+ * The client derives "did I react" by checking user_ids for its own id.
+ */
+export interface GridMessageReaction {
+  emoji: string;
+  count: number;
+  user_ids: string[];
 }
 
 /**
@@ -224,6 +236,7 @@ export type GridWsMessageType =
   | 'unread_update'
   | 'read_receipt'
   | 'message_resolved'
+  | 'reaction_updated'
   | 'dm_notification'
   | 'channel_notification'
   | 'mention_notification'
@@ -238,6 +251,7 @@ export type GridWsMessageType =
   | 'typing_start'
   | 'typing_stop'
   | 'mark_read'
+  | 'toggle_reaction'
   | 'ping';
 
 /**

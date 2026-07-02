@@ -15,6 +15,7 @@ import { GRID_AUTH_PROVIDER, GRID_USER_DATA_PROVIDER, GridAuthProvider, GridUser
 import {
   GridChannel,
   GridMessage,
+  GridMessageAttachment,
   GridTypingUser,
   GridWsConnectionState,
 } from '../../interfaces/grid.interface';
@@ -25,6 +26,8 @@ import { MessageInputComponent, MessageSendEvent } from '../message-input/messag
 import { ThreadPanelComponent } from '../thread-panel/thread-panel.component';
 import { ChannelFilesPanelComponent } from '../channel-files-panel/channel-files-panel.component';
 import { GroupMembersPopupComponent } from '../group-members-popup/group-members-popup.component';
+import { ImageLightboxComponent } from '../image-lightbox/image-lightbox.component';
+import { MessageSearchComponent } from '../message-search/message-search.component';
 
 @Component({
   selector: 'lib-grid',
@@ -40,6 +43,8 @@ import { GroupMembersPopupComponent } from '../group-members-popup/group-members
     ThreadPanelComponent,
     ChannelFilesPanelComponent,
     GroupMembersPopupComponent,
+    ImageLightboxComponent,
+    MessageSearchComponent,
   ],
   templateUrl: './grid.component.html',
   styleUrls: ['./grid.component.scss'],
@@ -73,6 +78,12 @@ export class GridComponent implements OnInit, OnDestroy {
   // Thread panel
   threadParentMessage: GridMessage | null = null;
   threadReplies: GridMessage[] = [];
+
+  // Image lightbox
+  lightboxAttachment: GridMessageAttachment | null = null;
+
+  // Message search overlay
+  isSearchOpen = false;
   isThreadPanelOpen = false;
 
   // Files panel
@@ -256,6 +267,15 @@ export class GridComponent implements OnInit, OnDestroy {
   @HostListener('window:resize')
   onResize(): void {
     this.checkScreenSize();
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onGlobalKeydown(event: KeyboardEvent): void {
+    // Cmd/Ctrl+K opens message search (Slack-style)
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      this.openSearch();
+    }
   }
 
   /**
@@ -623,6 +643,24 @@ export class GridComponent implements OnInit, OnDestroy {
           }
           this.cdr.markForCheck();
         }
+      });
+
+    // Reaction updates — replace the message's reaction set in place
+    this.gridWs.reactionUpdated$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ messageId, reactions }) => {
+        this.messages = this.messages.map(m =>
+          m.id === messageId ? { ...m, reactions } : m
+        );
+        if (this.threadParentMessage) {
+          if (this.threadParentMessage.id === messageId) {
+            this.threadParentMessage = { ...this.threadParentMessage, reactions };
+          }
+          this.threadReplies = this.threadReplies.map(m =>
+            m.id === messageId ? { ...m, reactions } : m
+          );
+        }
+        this.cdr.markForCheck();
       });
 
     // Group renamed by another user - update sidebar + header in real time
@@ -1270,6 +1308,168 @@ export class GridComponent implements OnInit, OnDestroy {
     this.isThreadPanelOpen = false;
     this.threadParentMessage = null;
     this.threadReplies = [];
+  }
+
+  /**
+   * Open/close the in-app image lightbox
+   */
+  openImageLightbox(attachment: GridMessageAttachment): void {
+    this.lightboxAttachment = attachment;
+    this.cdr.markForCheck();
+  }
+
+  closeImageLightbox(): void {
+    this.lightboxAttachment = null;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Message search overlay open/close and result navigation.
+   */
+  openSearch(): void {
+    this.isSearchOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  closeSearch(): void {
+    this.isSearchOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  onSearchResultSelected(event: { channelId: string; messageId: string }): void {
+    this.closeSearch();
+    // Reuse the activity-item navigation (jumps to the channel, fetching it
+    // if it's not already in the sidebar list)
+    this.onActivityItemSelected(event);
+  }
+
+  /**
+   * Save an edited message: optimistic local update, WebSocket first,
+   * REST fallback, revert on failure.
+   */
+  onEditSaved(event: { message: GridMessage; content: string }): void {
+    const { message, content } = event;
+    const original = message.content;
+
+    const applyContent = (value: string, edited: boolean) => {
+      this.messages = this.messages.map((m) =>
+        m.id === message.id ? { ...m, content: value, is_edited: edited || m.is_edited } : m
+      );
+      this.cdr.markForCheck();
+    };
+
+    applyContent(content, true);
+
+    const sent = this.gridWs.editMessage(message.id, content);
+    if (!sent) {
+      this.gridApi.editMessage(message.id, content).subscribe({
+        next: (updated) => {
+          if (!updated) {
+            console.error('Grid: edit REST fallback returned no message, reverting');
+            applyContent(original, message.is_edited);
+          }
+        },
+        error: (err) => {
+          console.error('Grid: edit REST fallback failed, reverting:', err);
+          applyContent(original, message.is_edited);
+        },
+      });
+    }
+  }
+
+  /**
+   * Delete a message: optimistic local removal, WebSocket first, REST fallback.
+   */
+  onDeleteRequested(message: GridMessage): void {
+    // Failed/pending optimistic messages only exist locally — just drop them
+    const isLocalOnly = message.pending || message.error || message.id.startsWith('temp_');
+
+    this.messages = this.messages.filter((m) => m.id !== message.id);
+    this.cdr.markForCheck();
+
+    if (isLocalOnly) return;
+
+    const sent = this.gridWs.deleteMessage(message.id);
+    if (!sent) {
+      this.gridApi.deleteMessage(message.id).subscribe({
+        error: (err) => console.error('Grid: delete REST fallback failed:', err),
+      });
+    }
+  }
+
+  /**
+   * Toggle an emoji reaction. Optimistic local update, WebSocket first,
+   * REST fallback. The server broadcasts reaction_updated to reconcile all
+   * clients (including this one), so the optimistic state self-corrects.
+   */
+  onReactionToggled(event: { message: GridMessage; emoji: string }): void {
+    const { message, emoji } = event;
+    const myId = this.getCurrentUserDocId();
+    if (!myId || message.pending || message.error || message.id.startsWith('temp_')) {
+      return; // Can't react to un-persisted messages
+    }
+
+    const optimistic = this.computeOptimisticReactions(message.reactions || [], emoji, myId);
+    this.applyReactions(message.id, optimistic);
+
+    const sent = this.gridWs.toggleReaction(message.id, emoji);
+    if (!sent) {
+      this.gridApi.toggleReaction(message.id, emoji).subscribe({
+        next: (res) => {
+          if (res?.reactions) {
+            this.applyReactions(message.id, res.reactions);
+          }
+        },
+        error: (err) => console.error('Grid: reaction REST fallback failed:', err),
+      });
+    }
+  }
+
+  /** Toggle the caller's emoji within an aggregated reaction list. */
+  private computeOptimisticReactions(
+    reactions: { emoji: string; count: number; user_ids: string[] }[],
+    emoji: string,
+    myId: string
+  ): { emoji: string; count: number; user_ids: string[] }[] {
+    const existing = reactions.find(r => r.emoji === emoji);
+    if (!existing) {
+      return [...reactions, { emoji, count: 1, user_ids: [myId] }];
+    }
+    const iReacted = existing.user_ids.includes(myId);
+    const updated = reactions
+      .map(r => {
+        if (r.emoji !== emoji) return r;
+        const user_ids = iReacted
+          ? r.user_ids.filter(id => id !== myId)
+          : [...r.user_ids, myId];
+        return { ...r, user_ids, count: user_ids.length };
+      })
+      .filter(r => r.count > 0);
+    return updated;
+  }
+
+  private applyReactions(messageId: string, reactions: { emoji: string; count: number; user_ids: string[] }[]): void {
+    this.messages = this.messages.map(m => (m.id === messageId ? { ...m, reactions } : m));
+    if (this.threadParentMessage) {
+      if (this.threadParentMessage.id === messageId) {
+        this.threadParentMessage = { ...this.threadParentMessage, reactions };
+      }
+      this.threadReplies = this.threadReplies.map(m => (m.id === messageId ? { ...m, reactions } : m));
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Retry a failed message: remove the errored copy and re-send as a fresh
+   * optimistic message (fresh temp id keeps the echo dedup hash valid).
+   */
+  onRetryRequested(message: GridMessage): void {
+    if (!this.currentChannel || !message.content) return;
+
+    this.messages = this.messages.filter((m) => m.id !== message.id);
+    this.cdr.markForCheck();
+
+    this.sendMessageToChannel(this.currentChannel.id, message.content, undefined, []);
   }
 
   /**

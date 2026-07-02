@@ -46,7 +46,8 @@
                 [href]="attachment.url"
                 target="_blank"
                 rel="noopener noreferrer"
-                [matTooltip]="'Open ' + attachment.original_filename"
+                [matTooltip]="'Preview ' + attachment.original_filename"
+                (click)="onImageClick($event, attachment)"
               >
                 <img
                   [src]="attachment.url"
@@ -143,7 +144,8 @@
                   [href]="attachment.url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  [matTooltip]="'Open ' + attachment.original_filename"
+                  [matTooltip]="'Preview ' + attachment.original_filename"
+                  (click)="onImageClick($event, attachment)"
                 >
                   <img
                     [src]="attachment.url"

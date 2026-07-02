@@ -58,9 +58,26 @@
           [class.error]="message.error"
         >
           <!-- Message Text -->
-          <div class="message-text" *ngIf="message.content">
+          <div class="message-text" *ngIf="message.content && editingMessageId !== message.id">
             <span [innerHTML]="formatMessageContent(message.content)"></span>
             <span class="edited-indicator" *ngIf="message.is_edited">(edited)</span>
+          </div>
+
+          <!-- Inline Edit -->
+          <div class="message-edit" *ngIf="editingMessageId === message.id">
+            <textarea
+              class="edit-textarea"
+              [(ngModel)]="editDraft"
+              (keydown)="onEditKeydown($event, message)"
+              rows="2"
+            ></textarea>
+            <div class="edit-hint">
+              <span>Enter to save &middot; Esc to cancel</span>
+              <div class="edit-buttons">
+                <button mat-button class="edit-cancel" (click)="cancelEdit()">Cancel</button>
+                <button mat-flat-button color="primary" class="edit-save" (click)="saveEdit(message)">Save</button>
+              </div>
+            </div>
           </div>
 
           <!-- Resolved Badge -->
@@ -82,7 +99,8 @@
                   [href]="attachment.url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  [matTooltip]="'Open ' + attachment.original_filename"
+                  [matTooltip]="'Preview ' + attachment.original_filename"
+                  (click)="onImageClick($event, attachment)"
                 >
                   <img
                     [src]="attachment.url"
@@ -131,6 +149,19 @@
             </ng-container>
           </div>
 
+          <!-- Reactions -->
+          <div class="message-reactions" *ngIf="message.reactions && message.reactions.length > 0">
+            <button
+              *ngFor="let reaction of message.reactions; trackBy: trackByEmoji"
+              class="reaction-chip"
+              [class.mine]="hasMyReaction(reaction)"
+              (click)="toggleReaction(message, reaction.emoji)"
+            >
+              <span class="reaction-emoji">{{ reaction.emoji }}</span>
+              <span class="reaction-count">{{ reaction.count }}</span>
+            </button>
+          </div>
+
           <!-- Thread Indicator -->
           <div
             class="thread-indicator"
@@ -143,6 +174,22 @@
 
           <!-- Message Actions (on hover) -->
           <div class="message-actions">
+            <button
+              mat-icon-button
+              class="action-button"
+              matTooltip="Add reaction"
+              (click)="toggleReactionPicker(message.id); $event.stopPropagation()"
+            >
+              <mat-icon>add_reaction</mat-icon>
+            </button>
+            <!-- Emoji picker popover -->
+            <div class="reaction-picker" *ngIf="reactionPickerFor === message.id" (click)="$event.stopPropagation()">
+              <button
+                *ngFor="let emoji of quickReactions"
+                class="reaction-option"
+                (click)="pickReaction(message, emoji)"
+              >{{ emoji }}</button>
+            </div>
             <button
               mat-icon-button
               class="action-button"
@@ -159,12 +206,44 @@
             >
               <mat-icon>{{ message.is_resolved ? 'remove_done' : 'done' }}</mat-icon>
             </button>
+            <button
+              *ngIf="message.content"
+              mat-icon-button
+              class="action-button"
+              [matTooltip]="copiedMessageId === message.id ? 'Copied!' : 'Copy text'"
+              (click)="copyMessage(message)"
+            >
+              <mat-icon>{{ copiedMessageId === message.id ? 'check' : 'content_copy' }}</mat-icon>
+            </button>
+            <button
+              *ngIf="canModify(message) && message.content"
+              mat-icon-button
+              class="action-button"
+              matTooltip="Edit message"
+              (click)="startEdit(message)"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button
+              *ngIf="canModify(message)"
+              mat-icon-button
+              class="action-button"
+              [class.confirm-delete]="confirmingDeleteId === message.id"
+              [matTooltip]="confirmingDeleteId === message.id ? 'Click again to delete' : 'Delete message'"
+              (click)="requestDelete(message)"
+            >
+              <mat-icon>{{ confirmingDeleteId === message.id ? 'delete_forever' : 'delete' }}</mat-icon>
+            </button>
           </div>
 
           <!-- Pending/Error Indicator -->
           <div class="message-status" *ngIf="message.pending || message.error">
             <mat-spinner diameter="12" *ngIf="message.pending"></mat-spinner>
-            <mat-icon class="error-icon" *ngIf="message.error">error</mat-icon>
+            <ng-container *ngIf="message.error">
+              <mat-icon class="error-icon">error</mat-icon>
+              <span class="error-text">Failed to send</span>
+              <button class="retry-button" (click)="retryMessage(message)">Retry</button>
+            </ng-container>
           </div>
         </div>
       </div>
@@ -192,4 +271,13 @@
     </div>
     <span class="typing-text">{{ getTypingText() }}</span>
   </div>
+
+  <!-- Jump to Latest Pill -->
+  <button class="jump-to-latest" *ngIf="userHasScrolledUp" (click)="jumpToLatest()">
+    <mat-icon>arrow_downward</mat-icon>
+    <span *ngIf="newMessagesWhileScrolledUp > 0">
+      {{ newMessagesWhileScrolledUp }} new {{ newMessagesWhileScrolledUp === 1 ? 'message' : 'messages' }}
+    </span>
+    <span *ngIf="newMessagesWhileScrolledUp === 0">Jump to latest</span>
+  </button>
 </div>

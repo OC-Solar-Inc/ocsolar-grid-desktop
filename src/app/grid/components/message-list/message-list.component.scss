@@ -685,3 +685,177 @@ $error-color: #e01e5a;
     }
   }
 }
+
+// Inline edit
+.message-edit {
+  margin: 2px 0;
+
+  .edit-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--grid-chat-accent);
+    border-radius: 6px;
+    background: var(--grid-chat-bg);
+    color: var(--grid-chat-text);
+    font: inherit;
+    font-size: 14px;
+    outline: none;
+  }
+
+  .edit-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--grid-chat-text-muted);
+
+    .edit-buttons {
+      display: flex;
+      gap: 6px;
+
+      button {
+        min-width: 0;
+        height: 26px;
+        padding: 0 10px;
+        font-size: 12px;
+        line-height: 26px;
+      }
+    }
+  }
+}
+
+// Delete confirmation state
+.message-actions .action-button.confirm-delete mat-icon {
+  color: $error-color;
+}
+
+// Failed message retry
+.message-status {
+  .error-text {
+    margin-left: 4px;
+    font-size: 12px;
+    color: $error-color;
+  }
+
+  .retry-button {
+    margin-left: 8px;
+    padding: 1px 8px;
+    font-size: 12px;
+    border: 1px solid $error-color;
+    border-radius: 4px;
+    background: transparent;
+    color: $error-color;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(224, 30, 90, 0.1);
+    }
+  }
+}
+
+// Jump to latest pill — sticks to the bottom of the scroll viewport
+.jump-to-latest {
+  position: sticky;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 16px;
+  background: var(--grid-chat-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  z-index: 20;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+}
+
+// Emoji reactions
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+
+  .reaction-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    height: 24px;
+    border: 1px solid var(--grid-chat-border);
+    border-radius: 12px;
+    background: var(--grid-chat-bg);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    transition: background 0.12s, border-color 0.12s;
+
+    &:hover {
+      background: var(--grid-chat-hover);
+    }
+
+    &.mine {
+      background: color-mix(in srgb, var(--grid-chat-accent) 18%, transparent);
+      border-color: var(--grid-chat-accent);
+    }
+
+    .reaction-count {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--grid-chat-text-muted);
+    }
+
+    &.mine .reaction-count {
+      color: var(--grid-chat-accent);
+    }
+  }
+}
+
+// Emoji reaction picker popover
+.reaction-picker {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--grid-chat-bg);
+  border: 1px solid var(--grid-chat-border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 30;
+
+  .reaction-option {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 4px;
+    border-radius: 6px;
+
+    &:hover {
+      background: var(--grid-chat-hover);
+      transform: scale(1.15);
+    }
+  }
+}

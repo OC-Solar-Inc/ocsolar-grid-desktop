@@ -6,6 +6,7 @@ import { GRID_CONFIG, GRID_AUTH_PROVIDER, GridConfig, GridAuthProvider } from '.
 import {
   GridChannel,
   GridMessage,
+  GridMessageReaction,
   GridProfile,
   GridChannelMember,
   GridPaginatedResponse,
@@ -381,6 +382,37 @@ export class GridApiService {
         user_name: userName,
       })
       .pipe(catchError(this.handleError<GridMessage>('toggleResolveMessage')));
+  }
+
+  /**
+   * REST fallback for toggling a reaction when the WebSocket is down.
+   * The server still broadcasts reaction_updated to other clients.
+   */
+  toggleReaction(messageId: string, emoji: string): Observable<{ message_id: string; channel_id: string; reactions: GridMessageReaction[] } | undefined> {
+    const userId = this.getCurrentUserId();
+    return this.http
+      .post<{ message_id: string; channel_id: string; reactions: GridMessageReaction[] }>(
+        `${this.baseUrl}/chat/messages/${messageId}/toggle_reaction/`,
+        { user_id: userId, emoji }
+      )
+      .pipe(catchError(this.handleError<{ message_id: string; channel_id: string; reactions: GridMessageReaction[] } | undefined>('toggleReaction')));
+  }
+
+  /**
+   * Full-text search of message content across channels the user can see.
+   */
+  searchMessages(query: string, limit = 30): Observable<GridMessage[]> {
+    const userId = this.getCurrentUserId();
+    let params = new HttpParams().set('q', query).set('limit', String(limit));
+    if (userId) {
+      params = params.set('user_id', userId);
+    }
+    return this.http
+      .get<{ results: GridMessage[]; count: number }>(`${this.baseUrl}/chat/messages/search/`, { params })
+      .pipe(
+        map((res) => res?.results || []),
+        catchError(this.handleError<GridMessage[]>('searchMessages'))
+      );
   }
 
   toggleReplyOnly(channelId: string, userId: string): Observable<GridChannel> {

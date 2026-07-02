@@ -20,6 +20,7 @@ import {
   GridWsTypingAction,
   GridWsMarkRead,
   GridMessage,
+  GridMessageReaction,
   GridTypingUser,
 } from '../interfaces/grid.interface';
 
@@ -85,6 +86,9 @@ export class GridWebsocketService implements OnDestroy {
 
   private messageResolvedSubject = new Subject<{ message: GridMessage; channelId: string }>();
   public messageResolved$ = this.messageResolvedSubject.asObservable();
+
+  private reactionUpdatedSubject = new Subject<{ messageId: string; channelId: string; reactions: GridMessageReaction[] }>();
+  public reactionUpdated$ = this.reactionUpdatedSubject.asObservable();
 
   private activitySubject = new Subject<void>();
   public activity$ = this.activitySubject.asObservable();
@@ -325,6 +329,15 @@ export class GridWebsocketService implements OnDestroy {
         });
         break;
 
+      case 'reaction_updated':
+        const reactionData = data as any;
+        this.reactionUpdatedSubject.next({
+          messageId: reactionData.message_id,
+          channelId: reactionData.channel_id,
+          reactions: reactionData.reactions || [],
+        });
+        break;
+
       case 'member_joined':
         console.log('Grid WebSocket: Member joined:', JSON.stringify(data, null, 2));
         const memberJoinedData = data as any;
@@ -466,6 +479,18 @@ export class GridWebsocketService implements OnDestroy {
     if (!sent) {
       this.markReadFallbackSubject.next({ channelId, lastReadMessageId });
     }
+  }
+
+  /**
+   * Toggle an emoji reaction on a message. Returns false if the socket is
+   * down so the caller can fall back to REST.
+   */
+  toggleReaction(messageId: string, emoji: string): boolean {
+    return this.send({
+      type: 'toggle_reaction',
+      message_id: messageId,
+      emoji,
+    });
   }
 
   // =====================

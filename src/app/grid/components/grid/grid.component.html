@@ -86,6 +86,15 @@
             </span>
           </div>
           <div class="channel-actions">
+            <!-- Search Button -->
+            <button
+              mat-icon-button
+              class="search-button"
+              (click)="openSearch()"
+              matTooltip="Search messages (⌘K)"
+            >
+              <mat-icon>search</mat-icon>
+            </button>
             <!-- Group Members Button - only for group channels -->
             <button
               *ngIf="currentChannel?.channel_type === 'group'"
@@ -144,7 +153,12 @@
           [unreadCountOnEntry]="unreadCountOnEntry"
           (loadMore)="loadMoreMessages()"
           (openThread)="openThreadPanel($event)"
-          (resolveToggled)="onResolveToggled($event)">
+          (resolveToggled)="onResolveToggled($event)"
+          (imagePreview)="openImageLightbox($event)"
+          (editSaved)="onEditSaved($event)"
+          (deleteRequested)="onDeleteRequested($event)"
+          (retryRequested)="onRetryRequested($event)"
+          (reactionToggled)="onReactionToggled($event)">
         </lib-message-list>
 
         <!-- Reply-Only Banner -->
@@ -189,7 +203,8 @@
         [channelId]="currentChannel?.id || ''"
         [channel]="currentChannel"
         (close)="closeThreadPanel()"
-        (replySent)="sendThreadReply($event)">
+        (replySent)="sendThreadReply($event)"
+        (imagePreview)="openImageLightbox($event)">
       </lib-thread-panel>
     </aside>
 
@@ -202,4 +217,20 @@
       </lib-channel-files-panel>
     </aside>
   </div>
+
+  <!-- Image Lightbox (in-app preview) -->
+  <lib-image-lightbox
+    *ngIf="lightboxAttachment"
+    [attachment]="lightboxAttachment"
+    (closed)="closeImageLightbox()">
+  </lib-image-lightbox>
+
+  <!-- Message Search overlay -->
+  <lib-message-search
+    *ngIf="isSearchOpen"
+    [userMap]="userMap"
+    [channels]="channels"
+    (closed)="closeSearch()"
+    (resultSelected)="onSearchResultSelected($event)">
+  </lib-message-search>
 </div>

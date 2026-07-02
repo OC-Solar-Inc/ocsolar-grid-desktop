@@ -1,0 +1,51 @@
+<div class="lightbox-backdrop" *ngIf="attachment" (click)="onBackdropClick($event)">
+  <!-- Toolbar -->
+  <div class="lightbox-toolbar">
+    <div class="lightbox-fileinfo">
+      <span class="lightbox-filename">{{ attachment.original_filename }}</span>
+      <span class="lightbox-filesize" *ngIf="attachment.file_size">{{ formatFileSize(attachment.file_size) }}</span>
+    </div>
+    <div class="lightbox-buttons">
+      <button
+        mat-icon-button
+        class="lightbox-button"
+        matTooltip="Download"
+        (click)="download()"
+      >
+        <mat-icon>download</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        class="lightbox-button"
+        matTooltip="Open in browser"
+        (click)="openInBrowser()"
+      >
+        <mat-icon>open_in_new</mat-icon>
+      </button>
+      <button
+        mat-icon-button
+        class="lightbox-button"
+        matTooltip="Close (Esc)"
+        (click)="close()"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Image -->
+  <img
+    *ngIf="!imageFailed"
+    class="lightbox-image"
+    [src]="attachment.url"
+    [alt]="attachment.original_filename"
+    (error)="imageFailed = true"
+  />
+
+  <!-- Load failure fallback -->
+  <div class="lightbox-error" *ngIf="imageFailed">
+    <mat-icon>broken_image</mat-icon>
+    <span>Couldn't load this image</span>
+    <button mat-stroked-button (click)="openInBrowser()">Open in browser</button>
+  </div>
+</div>

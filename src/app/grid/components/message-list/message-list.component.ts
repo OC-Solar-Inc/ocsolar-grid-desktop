@@ -7,24 +7,26 @@ import {
   ViewChild,
   AfterViewChecked,
   AfterViewInit,
+  HostListener,
   OnChanges,
   OnDestroy,
   SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { GridMessage, GridTypingUser, GridMessageAttachment } from '../../interfaces/grid.interface';
+import { GridMessage, GridTypingUser, GridMessageAttachment, GridMessageReaction } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 import { GridFileUploadService } from '../../services/grid-file-upload.service';
 
 @Component({
   selector: 'lib-message-list',
   standalone: true,
-  imports: [CommonModule, MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatProgressSpinnerModule, MatTooltipModule],
   templateUrl: './message-list.component.html',
   styleUrls: ['./message-list.component.scss'],
 })
@@ -40,14 +42,38 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   @Output() loadMore = new EventEmitter<void>();
   @Output() openThread = new EventEmitter<GridMessage>();
   @Output() resolveToggled = new EventEmitter<GridMessage>();
+  @Output() imagePreview = new EventEmitter<GridMessageAttachment>();
+  @Output() editSaved = new EventEmitter<{ message: GridMessage; content: string }>();
+  @Output() deleteRequested = new EventEmitter<GridMessage>();
+  @Output() retryRequested = new EventEmitter<GridMessage>();
+  @Output() reactionToggled = new EventEmitter<{ message: GridMessage; emoji: string }>();
 
   @ViewChild('scrollContainer') scrollContainer!: ElementRef<HTMLDivElement>;
+
+  // Inline edit state
+  editingMessageId: string | null = null;
+  editDraft = '';
+
+  // Two-click delete confirmation
+  confirmingDeleteId: string | null = null;
+  private confirmDeleteTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Copy feedback
+  copiedMessageId: string | null = null;
+  private copiedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Emoji reaction picker
+  reactionPickerFor: string | null = null;
+  readonly quickReactions = ['👍', '❤️', '😂', '🎉', '👀', '🙏', '🔥', '✅'];
+
+  // Jump-to-latest pill
+  userHasScrolledUp = false;
+  newMessagesWhileScrolledUp = 0;
 
   private shouldScrollToBottom = true;
   private previousMessageCount = 0;
   private previousTypingCount = 0;
   private previousLastMessageId: string | null = null;
-  private userHasScrolledUp = false;
   private preserveScrollPosition = false;
   private savedScrollHeight = 0;
   private resizeObserver: ResizeObserver | null = null;
@@ -83,6 +109,8 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
     }
+    if (this.confirmDeleteTimer) clearTimeout(this.confirmDeleteTimer);
+    if (this.copiedTimer) clearTimeout(this.copiedTimer);
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -113,12 +141,17 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       } else if ((hasNewMessages || lastMessageChanged) && !this.userHasScrolledUp) {
         // Scroll to bottom for new messages at the end
         this.shouldScrollToBottom = true;
+      } else if (hasNewMessages && lastMessageChanged && this.userHasScrolledUp && !isInitialLoad) {
+        // New messages arrived while scrolled up — count them for the jump pill
+        this.newMessagesWhileScrolledUp += currentCount - previousCount;
       }
 
       // Reset scroll flag on initial load or channel change (count goes to 0 or from 0)
       if (isInitialLoad || currentCount === 0) {
         this.userHasScrolledUp = false;
         this.shouldScrollToBottom = true;
+        this.newMessagesWhileScrolledUp = 0;
+        this.cancelEdit();
       }
 
       this.previousMessageCount = currentCount;
@@ -183,7 +216,14 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     } else {
       // User is at bottom - resume auto-scroll
       this.userHasScrolledUp = false;
+      this.newMessagesWhileScrolledUp = 0;
     }
+  }
+
+  jumpToLatest(): void {
+    this.userHasScrolledUp = false;
+    this.newMessagesWhileScrolledUp = 0;
+    this.scrollToBottomWithRetry();
   }
 
   onOpenThread(message: GridMessage): void {
@@ -529,6 +569,146 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     event.preventDefault();
     event.stopPropagation();
     this.fileUploadService.downloadAttachment(attachment.id, attachment.original_filename);
+  }
+
+  /**
+   * Open an image attachment in the in-app lightbox instead of the browser.
+   * The href stays on the anchor so middle-click/right-click still work.
+   */
+  onImageClick(event: Event, attachment: GridMessageAttachment): void {
+    event.preventDefault();
+    this.imagePreview.emit(attachment);
+  }
+
+  // =====================
+  // Edit / Delete / Copy / Retry actions
+  // =====================
+
+  canModify(message: GridMessage): boolean {
+    return (
+      !!this.currentUserId &&
+      message.user_id === this.currentUserId &&
+      !message.pending &&
+      !message.error
+    );
+  }
+
+  startEdit(message: GridMessage): void {
+    this.editingMessageId = message.id;
+    this.editDraft = message.content || '';
+    this.confirmingDeleteId = null;
+    // Focus the edit textarea once it renders
+    setTimeout(() => {
+      const textarea = this.scrollContainer?.nativeElement.querySelector<HTMLTextAreaElement>('.edit-textarea');
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      }
+    });
+  }
+
+  cancelEdit(): void {
+    this.editingMessageId = null;
+    this.editDraft = '';
+  }
+
+  saveEdit(message: GridMessage): void {
+    const content = this.editDraft.trim();
+    if (!content || content === message.content) {
+      this.cancelEdit();
+      return;
+    }
+    this.editSaved.emit({ message, content });
+    this.cancelEdit();
+  }
+
+  onEditKeydown(event: KeyboardEvent, message: GridMessage): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.saveEdit(message);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelEdit();
+    }
+  }
+
+  /**
+   * Two-click delete: first click arms the button, second click within 3s deletes.
+   */
+  requestDelete(message: GridMessage): void {
+    if (this.confirmingDeleteId === message.id) {
+      if (this.confirmDeleteTimer) {
+        clearTimeout(this.confirmDeleteTimer);
+        this.confirmDeleteTimer = null;
+      }
+      this.confirmingDeleteId = null;
+      this.deleteRequested.emit(message);
+      return;
+    }
+
+    this.confirmingDeleteId = message.id;
+    if (this.confirmDeleteTimer) clearTimeout(this.confirmDeleteTimer);
+    this.confirmDeleteTimer = setTimeout(() => {
+      this.confirmingDeleteId = null;
+      this.confirmDeleteTimer = null;
+    }, 3000);
+  }
+
+  copyMessage(message: GridMessage): void {
+    const plain = (message.content || '').replace(
+      /<@([A-Za-z0-9]+)>/g,
+      (_match, userId) => `@${this.getUserDisplayName(userId)}`
+    );
+    navigator.clipboard.writeText(plain).then(() => {
+      this.copiedMessageId = message.id;
+      if (this.copiedTimer) clearTimeout(this.copiedTimer);
+      this.copiedTimer = setTimeout(() => {
+        this.copiedMessageId = null;
+      }, 1500);
+    }).catch((err) => console.error('Copy failed:', err));
+  }
+
+  retryMessage(message: GridMessage): void {
+    this.retryRequested.emit(message);
+  }
+
+  // =====================
+  // Emoji reactions
+  // =====================
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    // Any click that isn't stopped by the picker/toggle closes the picker
+    if (this.reactionPickerFor) {
+      this.reactionPickerFor = null;
+    }
+  }
+
+  toggleReactionPicker(messageId: string): void {
+    this.reactionPickerFor = this.reactionPickerFor === messageId ? null : messageId;
+  }
+
+  closeReactionPicker(): void {
+    this.reactionPickerFor = null;
+  }
+
+  pickReaction(message: GridMessage, emoji: string): void {
+    this.reactionPickerFor = null;
+    this.reactionToggled.emit({ message, emoji });
+  }
+
+  /** Click an existing reaction chip to add/remove your own reaction. */
+  toggleReaction(message: GridMessage, emoji: string): void {
+    this.reactionToggled.emit({ message, emoji });
+  }
+
+  /** Whether the current user is among a reaction's user_ids. */
+  hasMyReaction(reaction: GridMessageReaction): boolean {
+    return !!this.currentUserId && reaction.user_ids.includes(this.currentUserId);
+  }
+
+  trackByEmoji(index: number, reaction: GridMessageReaction): string {
+    return reaction.emoji;
   }
 }
 

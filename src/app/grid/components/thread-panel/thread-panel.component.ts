@@ -36,6 +36,7 @@ export class ThreadPanelComponent implements OnChanges {
 
   @Output() close = new EventEmitter<void>();
   @Output() replySent = new EventEmitter<string>();
+  @Output() imagePreview = new EventEmitter<GridMessageAttachment>();
 
   @ViewChild('replyInput') replyInput!: ElementRef<HTMLTextAreaElement>;
 
@@ -280,6 +281,11 @@ export class ThreadPanelComponent implements OnChanges {
     event.preventDefault();
     event.stopPropagation();
     this.fileUploadService.downloadAttachment(attachment.id, attachment.original_filename);
+  }
+
+  onImageClick(event: Event, attachment: GridMessageAttachment): void {
+    event.preventDefault();
+    this.imagePreview.emit(attachment);
   }
 
   /**
