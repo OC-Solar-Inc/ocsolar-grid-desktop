@@ -253,13 +253,21 @@ function startJob(payload: any): Job {
 
 // ── HTTP routing ────────────────────────────────────────────────────────
 
-const ALLOWED_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|ocsolarprocess\.com|ocsolar-portal\.web\.app)(:\d+)?$/;
+// NOTE: the production portal origin is my-ocsolar-portal.web.app (Firebase
+// project "my-ocsolar-portal") — listing the bare project name without the
+// "my-" prefix silently broke CORS for every PM on the hosted portal, which
+// the panel surfaced as "desktop app not found".
+const ALLOWED_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|ocsolarprocess\.com|my-ocsolar-portal\.web\.app|my-ocsolar-portal\.firebaseapp\.com)(:\d+)?$/;
 function applyCors(req: http.IncomingMessage, res: http.ServerResponse) {
   const origin = req.headers.origin;
   if (typeof origin === "string" && ALLOWED_ORIGIN_RE.test(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    // Chrome Private/Local Network Access: public-site → localhost requests
+    // preflight with Access-Control-Request-Private-Network; without this
+    // opt-in header Chrome blocks the request once enforcement is on.
+    res.setHeader("Access-Control-Allow-Private-Network", "true");
   }
 }
 
