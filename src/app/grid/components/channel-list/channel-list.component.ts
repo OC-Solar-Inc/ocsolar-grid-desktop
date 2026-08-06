@@ -830,6 +830,45 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   }
 
   /** Reflects an open/closed response request in the feed without a reload. */
+  addActivityFromNotification(
+    channelId: string,
+    message: any,
+    senderId: string,
+    eventType: 'mention' | 'dm' | 'channel' | 'reply' | 'needs_response'
+  ): void {
+    const messageId = message?.id || '';
+    if (messageId && this.activityItems.some(item => item.message_id === messageId && item.event_type === eventType)) return;
+    const newItem: GridActivityItem = {
+      id: `ws_${eventType}_${messageId || Date.now()}`,
+      mentioner_user_id: senderId,
+      message_content: message?.content || '',
+      created_at: new Date().toISOString(),
+      is_read: false,
+      channel_id: channelId,
+      channel_type: '',
+      channel_name: '',
+      message_id: messageId,
+      event_type: eventType,
+      parent_message_id: message?.parent || null,
+      needs_response: message?.needs_response,
+    };
+
+    // Try to populate channel info from existing channels
+    const channel = this.channels.find(c => c.id === channelId);
+    if (channel) {
+      newItem.channel_type = channel.channel_type;
+      if (channel.channel_type === 'dm' || channel.channel_type === 'direct') {
+        newItem.channel_name = channel.dm_user?.display_name || 'Direct Message';
+      } else {
+        newItem.channel_name = channel.name || '';
+      }
+    }
+
+    this.activityItems = [newItem, ...this.activityItems];
+    this.unreadActivityCount++;
+    this.cdr.markForCheck();
+  }
+
   updateNeedsResponseActivityState(messageId: string, needsResponse: boolean): void {
     this.activityItems = this.activityItems.map(item =>
       item.message_id === messageId && item.event_type === 'needs_response'
