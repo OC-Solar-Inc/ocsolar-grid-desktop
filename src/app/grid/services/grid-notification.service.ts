@@ -5,18 +5,20 @@ const ENABLED_KEY = 'gridNotificationsEnabled';
 const DISMISSED_KEY = 'gridNotificationsDismissed';
 const PREFERENCES_KEY = 'gridNotificationPreferences';
 
-export type NotificationType = 'dm' | 'channel' | 'mention';
+export type NotificationType = 'dm' | 'channel' | 'mention' | 'needs_response';
 
 export interface NotificationPreferences {
   dm: boolean;
   channel: boolean;
   mention: boolean;
+  needs_response: boolean;
 }
 
 const DEFAULT_PREFERENCES: NotificationPreferences = {
   dm: true,
   channel: true,
   mention: true,
+  needs_response: true,
 };
 
 @Injectable()
