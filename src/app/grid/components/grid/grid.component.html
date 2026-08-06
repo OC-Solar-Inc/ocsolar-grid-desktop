@@ -161,15 +161,21 @@
           (reactionToggled)="onReactionToggled($event)">
         </lib-message-list>
 
+        <!-- Read-Only Member Banner -->
+        <div class="reply-only-banner" *ngIf="isReadOnlyMember()">
+          <mat-icon>lock</mat-icon>
+          <span>You have read-only access to this conversation. You can read messages but not post.</span>
+        </div>
+
         <!-- Reply-Only Banner -->
-        <div class="reply-only-banner" *ngIf="isReplyOnlyRestricted()">
+        <div class="reply-only-banner" *ngIf="!isReadOnlyMember() && isReplyOnlyRestricted()">
           <mat-icon>lock</mat-icon>
           <span>This group is in reply-only mode. Only the group owner can post new messages. You can reply in threads.</span>
         </div>
 
         <!-- Message Input -->
         <lib-message-input
-          *ngIf="!isReplyOnlyRestricted()"
+          *ngIf="!isReplyOnlyRestricted() && !isReadOnlyMember()"
           [channelId]="currentChannel.id"
           [channelName]="(currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct') ? (currentChannel.dm_user?.display_name || 'Direct Message') : currentChannel.name"
           [disabled]="connectionState !== 'connected'"

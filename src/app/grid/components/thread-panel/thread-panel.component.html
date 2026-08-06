@@ -199,8 +199,14 @@
     </div>
   </div>
 
+  <!-- Read-only members can follow the thread but not reply -->
+  <div class="reply-only-banner" *ngIf="isReadOnly">
+    <mat-icon>lock</mat-icon>
+    <span>You have read-only access to this conversation.</span>
+  </div>
+
   <!-- Reply Input -->
-  <div class="reply-input-container">
+  <div class="reply-input-container" *ngIf="!isReadOnly">
     <div class="input-wrapper">
       <div class="textarea-wrapper">
         <textarea

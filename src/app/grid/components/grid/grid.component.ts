@@ -1598,6 +1598,17 @@ export class GridComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Check if the current user has read-only access to this conversation.
+   * Unlike reply-only mode this is per-member and also blocks thread replies.
+   * The server is authoritative; this only keeps the UI honest.
+   */
+  isReadOnlyMember(): boolean {
+    if (!this.currentChannel) return false;
+    if (this.currentChannel.created_by_id === this.currentUserId) return false;
+    return this.currentChannel.current_user_posting_permission === 'read_only';
+  }
+
+  /**
    * Load thread replies
    */
   loadThreadReplies(): void {

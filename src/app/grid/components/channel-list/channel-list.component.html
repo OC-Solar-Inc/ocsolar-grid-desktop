@@ -196,7 +196,7 @@
     <!-- Channels Section -->
     <div class="section" *ngIf="!isLoading">
       <div class="section-header" (click)="isChannelsCollapsed = !isChannelsCollapsed">
-        <mat-icon>{{ isChannelsCollapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+        <mat-icon>{{ channelsExpanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
         <span>Channels</span>
         <div class="section-header-actions">
           <button
@@ -256,7 +256,7 @@
 
       <!-- Filter Popup Backdrop -->
       <div class="filter-popup-backdrop" *ngIf="showFilterPopup" (click)="toggleFilterPopup()"></div>
-      <ul class="channel-items" *ngIf="!isChannelsCollapsed">
+      <ul class="channel-items" *ngIf="channelsExpanded">
         <li
           *ngFor="let channel of publicChannels"
           class="channel-item"
@@ -270,7 +270,7 @@
           <span class="mention-badge" *ngIf="channel.has_mention">@</span>
         </li>
         <li class="empty-state" *ngIf="publicChannels.length === 0 && !searchQuery">
-          <span>No channels yet</span>
+          <span>{{ emptyStateLabel('channels') }}</span>
         </li>
         <li class="empty-state" *ngIf="publicChannels.length === 0 && searchQuery">
           <span>No channels match your search</span>
@@ -281,7 +281,7 @@
     <!-- Groups Section -->
     <div class="section" *ngIf="!isLoading">
       <div class="section-header" (click)="isGroupsCollapsed = !isGroupsCollapsed">
-        <mat-icon>{{ isGroupsCollapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+        <mat-icon>{{ groupsExpanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
         <span>Groups</span>
         <div class="section-header-actions">
           <div class="action-btn-container">
@@ -359,7 +359,7 @@
           </div>
         </div>
       </div>
-      <ul class="channel-items" *ngIf="!isGroupsCollapsed">
+      <ul class="channel-items" *ngIf="groupsExpanded">
         <li
           *ngFor="let group of groupChats"
           class="channel-item"
@@ -373,7 +373,7 @@
           <span class="mention-badge" *ngIf="group.has_mention">@</span>
         </li>
         <li class="empty-state" *ngIf="groupChats.length === 0 && !searchQuery">
-          <span>No groups yet</span>
+          <span>{{ emptyStateLabel('groups') }}</span>
         </li>
         <li class="empty-state" *ngIf="groupChats.length === 0 && searchQuery">
           <span>No groups match your search</span>
@@ -384,7 +384,7 @@
     <!-- Direct Messages Section -->
     <div class="section" *ngIf="!isLoading">
       <div class="section-header" (click)="isDmsCollapsed = !isDmsCollapsed">
-        <mat-icon>{{ isDmsCollapsed ? 'chevron_right' : 'expand_more' }}</mat-icon>
+        <mat-icon>{{ dmsExpanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
         <span>Direct Messages</span>
         <div class="section-header-actions">
           <div class="action-btn-container">
@@ -442,7 +442,7 @@
           </div>
         </div>
       </div>
-      <ul class="channel-items" *ngIf="!isDmsCollapsed">
+      <ul class="channel-items" *ngIf="dmsExpanded">
         <li
           *ngFor="let dm of directMessages"
           class="channel-item dm-item"
@@ -457,7 +457,7 @@
           <div class="dm-info">
             <span class="dm-name">{{ getChannelDisplayName(dm) }}</span>
             <span class="dm-preview" *ngIf="dm.last_message_preview">
-              {{ dm.last_message_preview }}
+              {{ formatPreview(dm.last_message_preview) }}
             </span>
           </div>
           <div class="dm-meta">
@@ -470,7 +470,7 @@
           </div>
         </li>
         <li class="empty-state" *ngIf="directMessages.length === 0 && !searchQuery">
-          <span>No direct messages yet</span>
+          <span>{{ emptyStateLabel('dms') }}</span>
         </li>
         <li class="empty-state" *ngIf="directMessages.length === 0 && searchQuery">
           <span>No DMs match your search</span>

@@ -13,6 +13,9 @@ export type GridUserStatus = 'online' | 'away' | 'dnd' | 'offline';
 // Channel member roles
 export type GridMemberRole = 'owner' | 'admin' | 'member';
 
+// Per-member ability to post in a group
+export type GridPostingPermission = 'can_post' | 'read_only';
+
 /**
  * Represents a chat channel (public, private, or DM)
  */
@@ -36,6 +39,11 @@ export interface GridChannel {
   member_ids?: string[];
   // Reply-only mode - only owner can post top-level messages
   is_reply_only?: boolean;
+  // Effective posting permission for the current user. Supplied by the API
+  // for groups; absent (and treated as can_post) on older backends.
+  current_user_posting_permission?: GridPostingPermission;
+  // Open response requests assigned to the current user
+  needs_response_count?: number;
 }
 
 /**
@@ -113,6 +121,8 @@ export interface GridChannelMember {
   notifications_enabled: boolean;
   unread_count: number;
   is_muted: boolean;
+  // Per-member group posting permission. Owners are always can_post.
+  posting_permission?: GridPostingPermission;
   username?: string;
   display_name?: string;
   avatar_url?: string;

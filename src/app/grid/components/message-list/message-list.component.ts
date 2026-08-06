@@ -298,7 +298,7 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     const escaped = this.escapeHtml(content);
 
     // Replace mentions with styled spans - use new regex each time to avoid lastIndex issues
-    const mentionPattern = /&lt;@([A-Za-z0-9]+)&gt;/g;
+    const mentionPattern = /&lt;@([A-Za-z0-9_-]+)&gt;/g;
     let formatted = escaped.replace(mentionPattern, (match, userId) => {
       const displayName = this.getUserDisplayName(userId);
       return `<span class="mention">@${this.escapeHtml(displayName)}</span>`;

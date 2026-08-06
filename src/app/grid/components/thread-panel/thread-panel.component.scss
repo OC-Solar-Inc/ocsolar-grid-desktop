@@ -581,3 +581,24 @@
     }
   }
 }
+
+// Shown instead of the reply composer for read-only members
+.reply-only-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--grid-chat-hover);
+  border-top: 1px solid var(--grid-chat-border);
+  color: var(--grid-chat-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--grid-chat-text-muted);
+  }
+}

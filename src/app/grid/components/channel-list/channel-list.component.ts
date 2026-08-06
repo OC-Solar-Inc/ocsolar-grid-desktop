@@ -82,7 +82,9 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   themeOptions: ThemeConfig[] = Object.values(GRID_THEMES);
 
   // Collapsible sections
-  isChannelsCollapsed = false;
+  // Channels is the longest and least personal list, so it starts collapsed;
+  // its header still carries the unread count.
+  isChannelsCollapsed = true;
   isGroupsCollapsed = false;
   isDmsCollapsed = false;
 
@@ -178,6 +180,13 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   /**
    * Called when search input changes
    */
+  // A search has to be able to reach a collapsed section, or results in it are
+  // simply invisible — which matters most for Channels, now collapsed by
+  // default. The chevron follows the same effective state.
+  get channelsExpanded(): boolean { return !this.isChannelsCollapsed || !!this.searchQuery; }
+  get groupsExpanded(): boolean { return !this.isGroupsCollapsed || !!this.searchQuery; }
+  get dmsExpanded(): boolean { return !this.isDmsCollapsed || !!this.searchQuery; }
+
   onSearchChange(query: string): void {
     this.searchQuery = query;
     this.searchSubject.next(query);
@@ -520,6 +529,38 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   /**
    * Get display name for a user
    */
+  /**
+   * Empty-state copy for a section. The list getters are already filtered, so
+   * "No direct messages yet" would be a lie whenever a filter emptied them —
+   * say what the filter did instead.
+   */
+  emptyStateLabel(kind: 'channels' | 'groups' | 'dms'): string {
+    const noun = kind === 'dms' ? 'direct messages' : kind === 'groups' ? 'groups' : 'channels';
+    switch (this.messageFilter) {
+      case 'unread': return `No unread ${noun}`;
+      case 'mentions': return `No ${noun} with mentions`;
+      default: return `No ${noun} yet`;
+    }
+  }
+
+  /**
+   * Preview text for a conversation row.
+   *
+   * Message bodies store mentions as the raw token <@userId>. Rendering that
+   * verbatim leaks internal IDs into the sidebar, so resolve each one to a
+   * display name and fall back to "@someone" for users outside the loaded
+   * directory. The server truncates the preview, which can bisect a token —
+   * drop the orphan rather than printing half of it.
+   */
+  formatPreview(preview?: string | null): string {
+    if (!preview) return '';
+    const resolved = preview.replace(/<@([A-Za-z0-9_-]+)>/g, (_match, userId: string) => {
+      const user = this.users.find(u => u.id === userId);
+      return user ? `@${this.getUserDisplayName(user)}` : '@someone';
+    });
+    return resolved.replace(/<@[A-Za-z0-9_-]*$/, '').trimEnd();
+  }
+
   getUserDisplayName(user: User): string {
     return user.sFullName || `${user.sFirstName} ${user.sLastName}`.trim() || 'Unknown User';
   }

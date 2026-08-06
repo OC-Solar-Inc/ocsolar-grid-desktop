@@ -103,9 +103,17 @@ export class ThreadPanelComponent implements OnChanges {
     }
   }
 
+  /**
+   * The API reports the caller's effective permission on the channel and always
+   * reports can_post for the owner, so this needs no separate owner check.
+   */
+  get isReadOnly(): boolean {
+    return this.channel?.current_user_posting_permission === 'read_only';
+  }
+
   sendReply(): void {
     const content = this.replyContent.trim();
-    if (!content) return;
+    if (!content || this.isReadOnly) return;
 
     // Convert display-format mentions (@[Name]) to backend format (<@userId>)
     const contentWithMentions = this.mentionService.convertMentionsForSend(content, this.mentionMap);
