@@ -1604,11 +1604,19 @@ $online-green: #2eb67d;
 // Always-visible conversation filters. These replaced a tune-icon popup:
 // burying a "someone is waiting on you" count behind two clicks defeats it.
 .conversation-filter-bar {
+  // Sticks to the top of the conversation scroll region: the filters are
+  // how you get back to "all", so they should not scroll out of reach.
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  padding: 0 12px 10px;
+  // The search box above is display:none on desktop (it lives in the title
+  // bar), so the bar needs its own breathing room at the top.
+  padding: 14px 12px 10px;
+  background: var(--grid-sidebar-bg);
   border-bottom: 1px solid var(--grid-sidebar-border);
 }
 
