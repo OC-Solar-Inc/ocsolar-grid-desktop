@@ -132,9 +132,12 @@
               [users]="channelListRef?.filteredUsersForGroup || []"
               [userMap]="userMap"
               [currentUserId]="currentUserId"
+              [channelOwnerId]="currentChannel.created_by_id || ''"
               [isReplyOnly]="currentChannel.is_reply_only || false"
               (close)="closeMembersPopup()"
               (membersChanged)="onMembersChanged()"
+              (postingPermissionsChanged)="onPostingPermissionsChanged()"
+              (ownershipTransferred)="onGroupOwnershipTransferred($event)"
               (replyOnlyToggled)="onReplyOnlyToggled()"
               (groupRenamed)="onGroupRenamed($event)"
               (groupDeleted)="onGroupDeleted()">
@@ -158,24 +161,22 @@
           (editSaved)="onEditSaved($event)"
           (deleteRequested)="onDeleteRequested($event)"
           (retryRequested)="onRetryRequested($event)"
-          (reactionToggled)="onReactionToggled($event)">
+          (reactionToggled)="onReactionToggled($event)"
+          [channelType]="currentChannel.channel_type"
+          (markUnreadRequested)="onMarkUnreadRequested($event)"
+          (needsResponseToggled)="onNeedsResponseToggled($event)">
         </lib-message-list>
 
-        <!-- Read-Only Member Banner -->
-        <div class="reply-only-banner" *ngIf="isReadOnlyMember()">
-          <mat-icon>lock</mat-icon>
-          <span>You have read-only access to this conversation. You can read messages but not post.</span>
-        </div>
-
-        <!-- Reply-Only Banner -->
-        <div class="reply-only-banner" *ngIf="!isReadOnlyMember() && isReplyOnlyRestricted()">
-          <mat-icon>lock</mat-icon>
-          <span>This group is in reply-only mode. Only the group owner can post new messages. You can reply in threads.</span>
+        <!-- Reply-Only / Read-Only Banner -->
+        <div class="reply-only-banner" *ngIf="isPostingBlocked()">
+          <mat-icon>{{ isGroupReadOnly() ? 'visibility' : 'lock' }}</mat-icon>
+          <span *ngIf="isGroupReadOnly()">You have read-only access to this group. Contact the group owner to request posting access.</span>
+          <span *ngIf="!isGroupReadOnly()">This group restricts new channel posts. You can still reply in threads.</span>
         </div>
 
         <!-- Message Input -->
         <lib-message-input
-          *ngIf="!isReplyOnlyRestricted() && !isReadOnlyMember()"
+          *ngIf="!isPostingBlocked()"
           [channelId]="currentChannel.id"
           [channelName]="(currentChannel.channel_type === 'dm' || currentChannel.channel_type === 'direct') ? (currentChannel.dm_user?.display_name || 'Direct Message') : currentChannel.name"
           [disabled]="connectionState !== 'connected'"
@@ -208,8 +209,11 @@
         [userMap]="userMap"
         [channelId]="currentChannel?.id || ''"
         [channel]="currentChannel"
+        [readOnly]="isGroupReadOnly()"
+        [followed]="isCurrentThreadFollowed()"
         (close)="closeThreadPanel()"
         (replySent)="sendThreadReply($event)"
+        (followToggled)="toggleCurrentThreadFollow()"
         (imagePreview)="openImageLightbox($event)">
       </lib-thread-panel>
     </aside>

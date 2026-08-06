@@ -582,23 +582,28 @@
   }
 }
 
-// Shown instead of the reply composer for read-only members
-.reply-only-banner {
+
+.follow-button {
+  margin-left: auto;
+  color: var(--grid-chat-text-muted, #9a9a9a);
+
+  &.active {
+    color: var(--grid-chat-accent, #4a9eff);
+  }
+}
+
+.thread-read-only {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
-  background: var(--grid-chat-hover);
-  border-top: 1px solid var(--grid-chat-border);
-  color: var(--grid-chat-text-muted);
-  font-size: 13px;
-  line-height: 1.4;
+  padding: 10px 16px;
+  border-top: 1px solid var(--grid-chat-border, rgba(255, 255, 255, 0.1));
+  color: var(--grid-chat-text-muted, #9a9a9a);
+  font-size: 12px;
 
   mat-icon {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-    color: var(--grid-chat-text-muted);
+    font-size: 17px;
+    width: 17px;
+    height: 17px;
   }
 }

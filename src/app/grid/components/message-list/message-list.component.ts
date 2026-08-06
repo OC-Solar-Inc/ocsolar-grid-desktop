@@ -19,7 +19,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { GridMessage, GridTypingUser, GridMessageAttachment, GridMessageReaction } from '../../interfaces/grid.interface';
+import { GridMessage, GridTypingUser, GridMessageAttachment, GridMessageReaction, GridChannelType } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 import { GridFileUploadService } from '../../services/grid-file-upload.service';
 
@@ -37,6 +37,7 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   @Input() typingUsers: GridTypingUser[] = [];
   @Input() userMap: Map<string, User> = new Map();
   @Input() currentUserId: string | null = null;
+  @Input() channelType: GridChannelType | null = null;
   @Input() unreadCountOnEntry = 0; // Number of unread messages when entering channel
 
   @Output() loadMore = new EventEmitter<void>();
@@ -47,6 +48,8 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   @Output() deleteRequested = new EventEmitter<GridMessage>();
   @Output() retryRequested = new EventEmitter<GridMessage>();
   @Output() reactionToggled = new EventEmitter<{ message: GridMessage; emoji: string }>();
+  @Output() markUnreadRequested = new EventEmitter<GridMessage>();
+  @Output() needsResponseToggled = new EventEmitter<GridMessage>();
 
   @ViewChild('scrollContainer') scrollContainer!: ElementRef<HTMLDivElement>;
 
@@ -234,6 +237,34 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
 
   toggleResolve(message: GridMessage): void {
     this.resolveToggled.emit(message);
+  }
+
+  canToggleNeedsResponse(message: GridMessage): boolean {
+    if (!this.canModify(message)) return false;
+    if (message.needs_response) return true;
+    if (this.channelType === 'dm' || this.channelType === 'direct') return true;
+    return this.mentionedRecipients(message).length > 0;
+  }
+
+  /** Mentioned users excluding the author: you cannot ask yourself for a
+   *  response, and the server rejects a request with no other recipient. */
+  private mentionedRecipients(message: GridMessage): string[] {
+    const ids = [...(message.content || '').matchAll(/<@([A-Za-z0-9_-]+)>/g)].map(m => m[1]);
+    return ids.filter(id => id !== message.user_id);
+  }
+
+  getNeedsResponseTooltip(message: GridMessage): string {
+    if (message.needs_response) return 'Mark response received';
+    if (this.canToggleNeedsResponse(message)) return 'Request a response';
+    if (/<@[A-Za-z0-9_-]+>/.test(message.content || '')) {
+      return 'Mention someone other than yourself to request a response';
+    }
+    return 'Mention at least one person before requesting a response';
+  }
+
+  toggleNeedsResponse(message: GridMessage): void {
+    if (!this.canToggleNeedsResponse(message)) return;
+    this.needsResponseToggled.emit(message);
   }
 
   /**
@@ -700,6 +731,10 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   /** Click an existing reaction chip to add/remove your own reaction. */
   toggleReaction(message: GridMessage, emoji: string): void {
     this.reactionToggled.emit({ message, emoji });
+  }
+
+  markUnread(message: GridMessage): void {
+    this.markUnreadRequested.emit(message);
   }
 
   /** Whether the current user is among a reaction's user_ids. */

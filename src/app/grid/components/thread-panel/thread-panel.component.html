@@ -5,6 +5,15 @@
       <h3>Thread</h3>
       <span class="channel-name">#{{ channelName }}</span>
     </div>
+    <button
+      mat-icon-button
+      (click)="onToggleFollow()"
+      class="follow-button"
+      [class.active]="followed"
+      [matTooltip]="followed ? 'Unfollow thread' : 'Follow thread replies'"
+    >
+      <mat-icon>{{ followed ? 'notifications_active' : 'notifications_none' }}</mat-icon>
+    </button>
     <button mat-icon-button (click)="onClose()" class="close-button">
       <mat-icon>close</mat-icon>
     </button>
@@ -199,14 +208,12 @@
     </div>
   </div>
 
-  <!-- Read-only members can follow the thread but not reply -->
-  <div class="reply-only-banner" *ngIf="isReadOnly">
-    <mat-icon>lock</mat-icon>
-    <span>You have read-only access to this conversation.</span>
-  </div>
-
   <!-- Reply Input -->
-  <div class="reply-input-container" *ngIf="!isReadOnly">
+  <div class="thread-read-only" *ngIf="readOnly">
+    <mat-icon>visibility</mat-icon>
+    <span>You have read-only access to this group.</span>
+  </div>
+  <div class="reply-input-container" *ngIf="!readOnly">
     <div class="input-wrapper">
       <div class="textarea-wrapper">
         <textarea
@@ -217,6 +224,7 @@
           (keydown)="onKeyDown($event)"
           rows="1"
           class="reply-textarea"
+          [disabled]="readOnly"
         ></textarea>
 
         <!-- Mention autocomplete dropdown -->
@@ -247,7 +255,7 @@
       <button
         mat-icon-button
         class="send-button"
-        [disabled]="!replyContent.trim()"
+        [disabled]="readOnly || !replyContent.trim()"
         (click)="sendReply()"
         matTooltip="Send reply"
       >

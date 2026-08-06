@@ -73,7 +73,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
 
   // Message filter
   showFilterPopup = false;
-  messageFilter: 'all' | 'mentions' | 'unread' = 'all';
+  messageFilter: 'all' | 'mentions' | 'unread' | 'needs_response' = 'all';
 
   // Settings/Theme
   showSettingsPopup = false;
@@ -90,18 +90,29 @@ export class ChannelListComponent implements OnInit, OnDestroy {
 
   // Notifications
   notificationsEnabled = false;
-  notificationPreferences: NotificationPreferences = { dm: true, channel: true, mention: true };
+  notificationPreferences: NotificationPreferences = { dm: true, channel: true, mention: true, needs_response: true };
 
   // Activity view
   showActivityView = false;
   activityItems: GridActivityItem[] = [];
   isLoadingActivity = false;
-  activityFilter: 'all' | 'unread' = 'all';
+  activityFilter: 'all' | 'unread' | 'mentions' | 'replies' | 'needs_response' = 'all';
   unreadActivityCount = 0;
 
   private destroy$ = new Subject<void>();
 
   showNexusToggle = true;
+
+  // Conversation preferences. Stored per browser profile for a quick rollout;
+  // cross-device would need authenticated preference endpoints.
+  private readonly FAVORITE_KEY = 'gridFavoriteConversationIds';
+  private readonly MUTED_KEY = 'gridMutedConversationIds';
+  private favoriteConversationIds = new Set<string>();
+  private mutedConversationIds = new Set<string>();
+  private readonly MAX_DISPLAY = 15;
+  showAllChannels = false;
+  showAllGroups = false;
+  showAllDms = false;
 
   constructor(
     private gridApi: GridApiService,
@@ -144,6 +155,8 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.favoriteConversationIds = this.loadIdSet(this.FAVORITE_KEY);
+    this.mutedConversationIds = this.loadIdSet(this.MUTED_KEY);
     // Fetch initial unread activity count for badge on bell icon
     this.gridApi.getActivity(true, 50).subscribe({
       next: (items) => {
@@ -192,90 +205,126 @@ export class ChannelListComponent implements OnInit, OnDestroy {
     this.searchSubject.next(query);
   }
 
-  private readonly MAX_DISPLAY = 15;
 
-  get publicChannels(): GridChannel[] {
-    // When searching, return search results from the index (all 1890 channels)
-    if (this.searchQuery && this.searchQuery.length >= 2) {
-      return this.searchResults;
+  private loadIdSet(key: string): Set<string> {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+      return new Set(Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : []);
+    } catch {
+      return new Set<string>();
     }
+  }
 
-    // Default: show loaded public channels with local filtering
-    const filtered = this.filterChannels(
-      this.channels.filter((c) => c.channel_type === 'public' || c.channel_type === 'private')
-    );
+  private saveIdSet(key: string, values: Set<string>): void {
+    try {
+      localStorage.setItem(key, JSON.stringify([...values]));
+    } catch {
+      // Storage unavailable (private mode); preferences stay in memory only.
+    }
+  }
 
-    // Sort: channels with unread or mentions first, then the rest
-    // Use spread to avoid mutating original array
-    const sorted = [...filtered].sort((a, b) => {
-      const aHasActivity = (a.unread_count && a.unread_count > 0) || a.has_mention;
-      const bHasActivity = (b.unread_count && b.unread_count > 0) || b.has_mention;
+  isFavorite(channel: GridChannel): boolean {
+    return this.favoriteConversationIds.has(channel.id);
+  }
 
-      // Channels with activity come first
-      if (aHasActivity && !bHasActivity) return -1;
-      if (!aHasActivity && bHasActivity) return 1;
+  isMuted(channel: GridChannel): boolean {
+    return this.mutedConversationIds.has(channel.id);
+  }
 
-      // Within same group, sort by last_message_at (most recent first)
+  toggleFavorite(channel: GridChannel, event: Event): void {
+    event.stopPropagation();
+    if (this.isFavorite(channel)) this.favoriteConversationIds.delete(channel.id);
+    else this.favoriteConversationIds.add(channel.id);
+    this.saveIdSet(this.FAVORITE_KEY, this.favoriteConversationIds);
+    this.cdr.markForCheck();
+  }
+
+  toggleMuted(channel: GridChannel, event: Event): void {
+    event.stopPropagation();
+    if (this.isMuted(channel)) this.mutedConversationIds.delete(channel.id);
+    else this.mutedConversationIds.add(channel.id);
+    this.saveIdSet(this.MUTED_KEY, this.mutedConversationIds);
+    this.cdr.markForCheck();
+  }
+
+  /** Favourites first, then open response requests, muted last. */
+  private sortConversations(channels: GridChannel[], mentionsFirst = false): GridChannel[] {
+    return [...channels].sort((a, b) => {
+      const favoriteDiff = Number(this.isFavorite(b)) - Number(this.isFavorite(a));
+      if (favoriteDiff) return favoriteDiff;
+
+      const responseDiff = Number((b.needs_response_count || 0) > 0) - Number((a.needs_response_count || 0) > 0);
+      if (responseDiff) return responseDiff;
+
+      const mutedDiff = Number(this.isMuted(a)) - Number(this.isMuted(b));
+      if (mutedDiff) return mutedDiff;
+
+      if (mentionsFirst) {
+        const mentionDiff = Number(!!b.has_mention) - Number(!!a.has_mention);
+        if (mentionDiff) return mentionDiff;
+      }
+
+      const unreadDiff = Number((b.unread_count || 0) > 0) - Number((a.unread_count || 0) > 0);
+      if (unreadDiff) return unreadDiff;
+
       const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
       const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
       return bTime - aTime;
     });
+  }
 
-    return sorted;
+  private publicChannelCandidates(): GridChannel[] {
+    // Searching hits the client-side index so all public channels are reachable,
+    // not just the page already loaded — desktop-specific behaviour.
+    const source = this.searchQuery && this.searchQuery.length >= 2
+      ? this.searchResults
+      : this.channels.filter((c) => c.channel_type === 'public' || c.channel_type === 'private');
+    return this.filterChannels(source);
+  }
+
+  private dmCandidates(): GridChannel[] {
+    return this.filterChannels(this.channels.filter((c) => c.channel_type === 'dm' || c.channel_type === 'direct'));
+  }
+
+  private groupCandidates(): GridChannel[] {
+    return this.filterChannels(this.channels.filter((c) => c.channel_type === 'group'));
+  }
+
+  get publicChannels(): GridChannel[] {
+    const sorted = this.sortConversations(this.publicChannelCandidates(), true);
+    return this.searchQuery || this.showAllChannels ? sorted : sorted.slice(0, this.MAX_DISPLAY);
   }
 
   get directMessages(): GridChannel[] {
-    const filtered = this.filterChannels(
-      this.channels.filter((c) => c.channel_type === 'dm' || c.channel_type === 'direct')
-    );
-
-    // Sort: DMs with unread first, then by last message time
-    // Use spread to avoid mutating original array
-    const sorted = [...filtered].sort((a, b) => {
-      const aHasUnread = a.unread_count && a.unread_count > 0;
-      const bHasUnread = b.unread_count && b.unread_count > 0;
-
-      // DMs with unread come first
-      if (aHasUnread && !bHasUnread) return -1;
-      if (!aHasUnread && bHasUnread) return 1;
-
-      // Within same group, sort by last_message_at (most recent first)
-      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return bTime - aTime;
-    });
-
-    return sorted;
+    const sorted = this.sortConversations(this.dmCandidates());
+    return this.searchQuery || this.showAllDms ? sorted : sorted.slice(0, this.MAX_DISPLAY);
   }
 
   get groupChats(): GridChannel[] {
-    const filtered = this.filterChannels(
-      this.channels.filter((c) => c.channel_type === 'group')
-    );
+    const sorted = this.sortConversations(this.groupCandidates(), true);
+    return this.searchQuery || this.showAllGroups ? sorted : sorted.slice(0, this.MAX_DISPLAY);
+  }
 
-    // Sort: Groups with mentions first, then unread, then by last message time
-    const sorted = [...filtered].sort((a, b) => {
-      const aHasMention = a.has_mention;
-      const bHasMention = b.has_mention;
+  get publicChannelCount(): number { return this.publicChannelCandidates().length; }
+  get groupCount(): number { return this.groupCandidates().length; }
+  get dmCount(): number { return this.dmCandidates().length; }
+  get unreadChannelCount(): number {
+    return this.channels.filter(c => (c.channel_type === 'public' || c.channel_type === 'private') && (c.unread_count || 0) > 0).length;
+  }
+  get unreadGroupCount(): number {
+    return this.channels.filter(c => c.channel_type === 'group' && (c.unread_count || 0) > 0).length;
+  }
+  get unreadDmCount(): number {
+    return this.channels.filter(c => (c.channel_type === 'dm' || c.channel_type === 'direct') && (c.unread_count || 0) > 0).length;
+  }
+  get needsResponseCount(): number {
+    return this.channels.reduce((total, channel) => total + (channel.needs_response_count || 0), 0);
+  }
 
-      // Mentions first
-      if (aHasMention && !bHasMention) return -1;
-      if (!aHasMention && bHasMention) return 1;
-
-      const aHasUnread = a.unread_count && a.unread_count > 0;
-      const bHasUnread = b.unread_count && b.unread_count > 0;
-
-      // Then unread
-      if (aHasUnread && !bHasUnread) return -1;
-      if (!aHasUnread && bHasUnread) return 1;
-
-      // Then by last_message_at (most recent first)
-      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-      return bTime - aTime;
-    });
-
-    return sorted;
+  toggleShowAll(section: 'channels' | 'groups' | 'dms'): void {
+    if (section === 'channels') this.showAllChannels = !this.showAllChannels;
+    if (section === 'groups') this.showAllGroups = !this.showAllGroups;
+    if (section === 'dms') this.showAllDms = !this.showAllDms;
   }
 
   private filterChannels(channels: GridChannel[]): GridChannel[] {
@@ -288,6 +337,8 @@ export class ChannelListComponent implements OnInit, OnDestroy {
       // Filter channels where user was mentioned (has_mention flag from backend)
       // Strict check - only show channels with explicit has_mention flag
       filtered = filtered.filter((c) => c.has_mention === true);
+    } else if (this.messageFilter === 'needs_response') {
+      filtered = filtered.filter((c) => (c.needs_response_count || 0) > 0);
     }
 
     // Apply search filter
@@ -413,12 +464,6 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   // Filter Methods
   // =====================
 
-  toggleFilterPopup(): void {
-    this.showFilterPopup = !this.showFilterPopup;
-    this.showDmForm = false;
-    this.showCreateForm = false;
-    this.showSettingsPopup = false;
-  }
 
   // =====================
   // Settings/Theme Methods
@@ -454,9 +499,8 @@ export class ChannelListComponent implements OnInit, OnDestroy {
     this.gridNotification.setPreference(type, !current);
   }
 
-  setMessageFilter(filter: 'all' | 'mentions' | 'unread'): void {
+  setMessageFilter(filter: 'all' | 'mentions' | 'unread' | 'needs_response'): void {
     this.messageFilter = filter;
-    this.showFilterPopup = false;
   }
 
   markAllAsRead(): void {
@@ -539,6 +583,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
     switch (this.messageFilter) {
       case 'unread': return `No unread ${noun}`;
       case 'mentions': return `No ${noun} with mentions`;
+      case 'needs_response': return `No ${noun} need a response`;
       default: return `No ${noun} yet`;
     }
   }
@@ -697,7 +742,8 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   loadActivity(): void {
     this.isLoadingActivity = true;
     const unreadOnly = this.activityFilter === 'unread';
-    this.gridApi.getActivity(unreadOnly, 50).subscribe({
+    const needsResponseOnly = this.activityFilter === 'needs_response';
+    this.gridApi.getActivity(unreadOnly, 50, needsResponseOnly).subscribe({
       next: (items) => {
         // Preserve real-time WebSocket items not already in API response (dedup by message_id)
         const apiMessageIds = new Set(items.map(i => i.message_id).filter(Boolean));
@@ -731,9 +777,19 @@ export class ChannelListComponent implements OnInit, OnDestroy {
     });
   }
 
-  setActivityFilter(filter: 'all' | 'unread'): void {
+  setActivityFilter(filter: 'all' | 'unread' | 'mentions' | 'replies' | 'needs_response'): void {
     this.activityFilter = filter;
     this.loadActivity();
+  }
+
+  /** Mentions, replies and needs-response are narrowed client-side; unread and
+   *  needs-response are also pushed to the API so the server can filter. */
+  get displayedActivityItems(): GridActivityItem[] {
+    if (this.activityFilter === 'unread') return this.activityItems.filter(item => !item.is_read);
+    if (this.activityFilter === 'mentions') return this.activityItems.filter(item => !item.event_type || item.event_type === 'mention');
+    if (this.activityFilter === 'replies') return this.activityItems.filter(item => item.event_type === 'reply');
+    if (this.activityFilter === 'needs_response') return this.activityItems.filter(item => item.event_type === 'needs_response' && item.needs_response !== false);
+    return this.activityItems;
   }
 
   markAllActivityRead(): void {
@@ -751,12 +807,75 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   }
 
   onActivityItemClick(item: GridActivityItem): void {
-    // Mark all activity items for this channel as read (not just the clicked one)
-    this.markActivityReadForChannel(item.channel_id);
+    this.markActivityItemRead(item.id);
 
     // Emit selected event and switch back to channel view
     this.activityItemSelected.emit({ channelId: item.channel_id, messageId: item.message_id });
     this.showActivityView = false;
+    this.cdr.markForCheck();
+  }
+
+  /** Only the opened item goes read; the rest of the conversation's history
+   *  stays in the feed. Synthetic ws_ items exist client-side only. */
+  private markActivityItemRead(itemId: string): void {
+    this.activityItems = this.activityItems.map(item =>
+      item.id === itemId ? { ...item, is_read: true } : item
+    );
+    this.unreadActivityCount = this.activityItems.filter(item => !item.is_read).length;
+    if (!itemId.startsWith('ws_')) {
+      this.gridApi.markActivityRead(itemId).subscribe({
+        error: () => this.loadActivity(),
+      });
+    }
+  }
+
+  /** Reflects an open/closed response request in the feed without a reload. */
+  addActivityFromNotification(
+    channelId: string,
+    message: any,
+    senderId: string,
+    eventType: 'mention' | 'dm' | 'channel' | 'reply' | 'needs_response'
+  ): void {
+    const messageId = message?.id || '';
+    if (messageId && this.activityItems.some(item => item.message_id === messageId && item.event_type === eventType)) return;
+    const newItem: GridActivityItem = {
+      id: `ws_${eventType}_${messageId || Date.now()}`,
+      mentioner_user_id: senderId,
+      message_content: message?.content || '',
+      created_at: new Date().toISOString(),
+      is_read: false,
+      channel_id: channelId,
+      channel_type: '',
+      channel_name: '',
+      message_id: messageId,
+      event_type: eventType,
+      parent_message_id: message?.parent || null,
+      needs_response: message?.needs_response,
+    };
+
+    // Try to populate channel info from existing channels
+    const channel = this.channels.find(c => c.id === channelId);
+    if (channel) {
+      newItem.channel_type = channel.channel_type;
+      if (channel.channel_type === 'dm' || channel.channel_type === 'direct') {
+        newItem.channel_name = channel.dm_user?.display_name || 'Direct Message';
+      } else {
+        newItem.channel_name = channel.name || '';
+      }
+    }
+
+    this.activityItems = [newItem, ...this.activityItems];
+    this.unreadActivityCount++;
+    this.cdr.markForCheck();
+  }
+
+  updateNeedsResponseActivityState(messageId: string, needsResponse: boolean): void {
+    this.activityItems = this.activityItems.map(item =>
+      item.message_id === messageId && item.event_type === 'needs_response'
+        ? { ...item, needs_response: needsResponse, is_read: needsResponse ? item.is_read : true }
+        : item
+    );
+    this.unreadActivityCount = this.activityItems.filter(item => !item.is_read).length;
     this.cdr.markForCheck();
   }
 
@@ -772,6 +891,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   }
 
   getActivityChannelIcon(item: GridActivityItem): string {
+    if (item.event_type === 'needs_response') return 'priority_high';
     switch (item.channel_type) {
       case 'dm':
       case 'direct':

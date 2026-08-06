@@ -17,6 +17,7 @@ import {
   GridUpdateProfileRequest,
   GridChannelFilesResponse,
   GridActivityItem,
+  GridPostingPermission,
 } from '../interfaces/grid.interface';
 
 /**
@@ -499,11 +500,12 @@ export class GridApiService {
   // Activity Operations
   // =====================
 
-  getActivity(unreadOnly: boolean, limit: number): Observable<GridActivityItem[]> {
+  getActivity(unreadOnly: boolean, limit: number, needsResponseOnly = false): Observable<GridActivityItem[]> {
     const userId = this.getCurrentUserId();
     const params = new HttpParams()
       .set('user_id', userId || '')
       .set('unread_only', unreadOnly.toString())
+      .set('needs_response_only', needsResponseOnly.toString())
       .set('limit', limit.toString());
     return this.http
       .get<GridActivityItem[]>(`${this.baseUrl}/chat/activity/`, { params })
@@ -515,5 +517,95 @@ export class GridApiService {
     return this.http
       .post<any>(`${this.baseUrl}/chat/activity/mark_all_read/`, { user_id: userId })
       .pipe(catchError(this.handleError<any>('markAllActivityRead')));
+  }
+
+  markActivityRead(activityId: string): Observable<void> {
+    const userId = this.getCurrentUserId();
+    return this.http
+      .post<void>(`${this.baseUrl}/chat/activity/${activityId}/mark_read/`, { user_id: userId })
+      .pipe(catchError(this.handleError<void>('markActivityRead')));
+  }
+
+  /**
+   * Mark a conversation unread starting at a selected message.
+   */
+  markAsUnread(channelId: string, messageId: string): Observable<void> {
+    const userId = this.getCurrentUserId();
+    return this.http
+      .post<void>(`${this.baseUrl}/chat/channels/${channelId}/mark_unread/`, {
+        user_id: userId,
+        message_id: messageId,
+      })
+      .pipe(catchError(this.handleError<void>('markAsUnread')));
+  }
+
+  /**
+   * Open or close an explicit response request on a message authored by the caller.
+   */
+  setMessageNeedsResponse(
+    messageId: string,
+    needsResponse: boolean
+  ): Observable<{ message: GridMessage; channel_needs_response_count: number }> {
+    const userId = this.getCurrentUserId();
+    return this.http
+      .post<{ message: GridMessage; channel_needs_response_count: number }>(
+        `${this.baseUrl}/chat/messages/${messageId}/needs_response/`,
+        { user_id: userId, needs_response: needsResponse }
+      )
+      .pipe(catchError(this.handleError<{ message: GridMessage; channel_needs_response_count: number }>('setMessageNeedsResponse')));
+  }
+
+  /**
+   * Update an individual group member's ability to post.
+   * The server enforces that only the owner, or an admin acting on a regular
+   * member, may call this.
+   */
+  updateMemberPostingPermission(
+    channelId: string,
+    memberUserId: string,
+    postingPermission: GridPostingPermission
+  ): Observable<GridChannelMember> {
+    const userId = this.getCurrentUserId();
+    return this.http
+      .post<GridChannelMember>(`${this.baseUrl}/chat/channels/${channelId}/member_posting_permission/`, {
+        user_id: userId,
+        member_user_id: memberUserId,
+        posting_permission: postingPermission,
+      })
+      .pipe(catchError(this.handleError<GridChannelMember>('updateMemberPostingPermission')));
+  }
+
+  /**
+   * Promote a group member to admin or return an admin to member. Owner only.
+   */
+  updateGroupMemberRole(
+    channelId: string,
+    memberUserId: string,
+    role: 'admin' | 'member'
+  ): Observable<GridChannelMember> {
+    const userId = this.getCurrentUserId();
+    return this.http
+      .post<GridChannelMember>(`${this.baseUrl}/chat/channels/${channelId}/member_role/`, {
+        user_id: userId,
+        member_user_id: memberUserId,
+        role,
+      })
+      .pipe(catchError(this.handleError<GridChannelMember>('updateGroupMemberRole')));
+  }
+
+  /**
+   * Atomically transfer group ownership. The prior owner remains an admin.
+   */
+  transferGroupOwnership(
+    channelId: string,
+    newOwnerUserId: string
+  ): Observable<{ channel: GridChannel; previous_owner: GridChannelMember; new_owner: GridChannelMember }> {
+    const userId = this.getCurrentUserId();
+    return this.http
+      .post<{ channel: GridChannel; previous_owner: GridChannelMember; new_owner: GridChannelMember }>(
+        `${this.baseUrl}/chat/channels/${channelId}/transfer_ownership/`,
+        { user_id: userId, new_owner_user_id: newOwnerUserId }
+      )
+      .pipe(catchError(this.handleError<{ channel: GridChannel; previous_owner: GridChannelMember; new_owner: GridChannelMember }>('transferGroupOwnership')));
   }
 }

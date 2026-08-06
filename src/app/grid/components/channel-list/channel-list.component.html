@@ -47,6 +47,21 @@
           [class.active]="activityFilter === 'unread'"
           (click)="setActivityFilter('unread')"
         >Unread</button>
+        <button
+          class="activity-chip"
+          [class.active]="activityFilter === 'mentions'"
+          (click)="setActivityFilter('mentions')"
+        >@ Mentions</button>
+        <button
+          class="activity-chip"
+          [class.active]="activityFilter === 'replies'"
+          (click)="setActivityFilter('replies')"
+        >Replies</button>
+        <button
+          class="activity-chip"
+          [class.active]="activityFilter === 'needs_response'"
+          (click)="setActivityFilter('needs_response')"
+        >Needs response</button>
       </div>
       <button
         class="activity-mark-read-btn"
@@ -67,7 +82,7 @@
     <!-- Activity List -->
     <div class="activity-list" *ngIf="!isLoadingActivity">
       <div
-        *ngFor="let item of activityItems"
+        *ngFor="let item of displayedActivityItems"
         class="activity-item"
         [class.unread]="!item.is_read"
         (click)="onActivityItemClick(item)"
@@ -95,7 +110,7 @@
       </div>
 
       <!-- Empty State -->
-      <div class="activity-empty" *ngIf="activityItems.length === 0">
+      <div class="activity-empty" *ngIf="displayedActivityItems.length === 0">
         <mat-icon>notifications_none</mat-icon>
         <span>No activity yet</span>
         <span class="activity-empty-sub">Mentions and notifications will appear here</span>
@@ -187,6 +202,22 @@
       <mat-spinner *ngIf="isSearching" diameter="16" class="search-spinner"></mat-spinner>
     </div>
 
+    <div class="conversation-filter-bar">
+      <button class="conversation-filter-chip" [class.active]="messageFilter === 'all'" (click)="setMessageFilter('all')">All</button>
+      <button class="conversation-filter-chip" [class.active]="messageFilter === 'unread'" (click)="setMessageFilter('unread')">
+        Unread
+        <span *ngIf="unreadDmCount + unreadGroupCount + unreadChannelCount > 0">{{ unreadDmCount + unreadGroupCount + unreadChannelCount }}</span>
+      </button>
+      <button class="conversation-filter-chip" [class.active]="messageFilter === 'mentions'" (click)="setMessageFilter('mentions')">@ Mentions</button>
+      <button class="conversation-filter-chip needs-response" [class.active]="messageFilter === 'needs_response'" (click)="setMessageFilter('needs_response')">
+        Needs response
+        <span *ngIf="needsResponseCount > 0">{{ needsResponseCount > 99 ? '99+' : needsResponseCount }}</span>
+      </button>
+      <button class="mark-read-compact" (click)="markAllAsRead()" matTooltip="Mark every conversation read">
+        <mat-icon>done_all</mat-icon>
+      </button>
+    </div>
+
     <!-- Loading State -->
     <div class="loading-state" *ngIf="isLoading">
       <mat-spinner diameter="24"></mat-spinner>
@@ -198,64 +229,8 @@
       <div class="section-header" (click)="isChannelsCollapsed = !isChannelsCollapsed">
         <mat-icon>{{ channelsExpanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
         <span>Channels</span>
-        <div class="section-header-actions">
-          <button
-            class="filter-btn"
-            (click)="toggleFilterPopup(); $event.stopPropagation()"
-            [class.active]="messageFilter !== 'all'"
-            matTooltip="Filter messages"
-          >
-            <mat-icon>tune</mat-icon>
-          </button>
-        </div>
       </div>
 
-      <!-- Filter Popup -->
-      <div class="filter-popup" *ngIf="showFilterPopup" (click)="$event.stopPropagation()">
-        <div class="filter-popup-header">
-          <span>Sort & Filter</span>
-        </div>
-        <div class="filter-popup-options">
-          <div
-            class="filter-option"
-            [class.selected]="messageFilter === 'all'"
-            (click)="setMessageFilter('all')"
-          >
-            <mat-icon>inbox</mat-icon>
-            <span>All Messages</span>
-            <mat-icon class="check-icon" *ngIf="messageFilter === 'all'">check</mat-icon>
-          </div>
-          <div
-            class="filter-option"
-            [class.selected]="messageFilter === 'unread'"
-            (click)="setMessageFilter('unread')"
-          >
-            <mat-icon>mark_email_unread</mat-icon>
-            <span>Unread Only</span>
-            <mat-icon class="check-icon" *ngIf="messageFilter === 'unread'">check</mat-icon>
-          </div>
-          <div
-            class="filter-option"
-            [class.selected]="messageFilter === 'mentions'"
-            (click)="setMessageFilter('mentions')"
-          >
-            <mat-icon>alternate_email</mat-icon>
-            <span>Mentions Only</span>
-            <mat-icon class="check-icon" *ngIf="messageFilter === 'mentions'">check</mat-icon>
-          </div>
-          <div class="filter-divider"></div>
-          <div
-            class="filter-option action-option"
-            (click)="markAllAsRead()"
-          >
-            <mat-icon>done_all</mat-icon>
-            <span>Mark all as read</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Filter Popup Backdrop -->
-      <div class="filter-popup-backdrop" *ngIf="showFilterPopup" (click)="toggleFilterPopup()"></div>
       <ul class="channel-items" *ngIf="channelsExpanded">
         <li
           *ngFor="let channel of publicChannels"
@@ -263,10 +238,23 @@
           [class.selected]="isSelected(channel)"
           [class.unread]="channel.unread_count && channel.unread_count > 0"
           [class.has-mention]="channel.has_mention"
+          [class.muted]="isMuted(channel)"
           (click)="selectChannel(channel)"
         >
           <mat-icon class="channel-icon">{{ getChannelIcon(channel) }}</mat-icon>
-          <span class="channel-name">{{ channel.name }}</span>
+          <div class="conversation-info">
+            <span class="channel-name">{{ channel.name }}</span>
+            <span class="conversation-preview" *ngIf="channel.last_message_preview">{{ formatPreview(channel.last_message_preview) }}</span>
+          </div>
+          <div class="conversation-actions">
+            <button (click)="toggleFavorite(channel, $event)" [class.active]="isFavorite(channel)" [matTooltip]="isFavorite(channel) ? 'Remove from favorites' : 'Add to favorites'"><mat-icon>{{ isFavorite(channel) ? 'star' : 'star_border' }}</mat-icon></button>
+            <button (click)="toggleMuted(channel, $event)" [class.active]="isMuted(channel)" [matTooltip]="isMuted(channel) ? 'Unmute' : 'Mute'"><mat-icon>{{ isMuted(channel) ? 'notifications_off' : 'notifications_none' }}</mat-icon></button>
+          </div>
+          <div class="conversation-meta">
+            <span class="conversation-time" *ngIf="channel.last_message_at">{{ formatLastMessageTime(channel.last_message_at) }}</span>
+            <span class="unread-badge" *ngIf="channel.unread_count && channel.unread_count > 0">{{ channel.unread_count > 99 ? '99+' : channel.unread_count }}</span>
+            <span class="needs-response-count" *ngIf="channel.needs_response_count && channel.needs_response_count > 0">! {{ channel.needs_response_count }}</span>
+          </div>
           <span class="mention-badge" *ngIf="channel.has_mention">@</span>
         </li>
         <li class="empty-state" *ngIf="publicChannels.length === 0 && !searchQuery">
@@ -274,6 +262,9 @@
         </li>
         <li class="empty-state" *ngIf="publicChannels.length === 0 && searchQuery">
           <span>No channels match your search</span>
+        </li>
+        <li class="show-all-row" *ngIf="!searchQuery && publicChannelCount > 15">
+          <button (click)="toggleShowAll('channels')">{{ showAllChannels ? 'Show fewer' : 'See all channels' }}</button>
         </li>
       </ul>
     </div>
@@ -366,10 +357,23 @@
           [class.selected]="isSelected(group)"
           [class.unread]="group.unread_count && group.unread_count > 0"
           [class.has-mention]="group.has_mention"
+          [class.muted]="isMuted(group)"
           (click)="selectChannel(group)"
         >
           <mat-icon class="channel-icon">group</mat-icon>
-          <span class="channel-name">{{ getChannelDisplayName(group) }}</span>
+          <div class="conversation-info">
+            <span class="channel-name">{{ getChannelDisplayName(group) }}</span>
+            <span class="conversation-preview" *ngIf="group.last_message_preview">{{ formatPreview(group.last_message_preview) }}</span>
+          </div>
+          <div class="conversation-actions">
+            <button (click)="toggleFavorite(group, $event)" [class.active]="isFavorite(group)" [matTooltip]="isFavorite(group) ? 'Remove from favorites' : 'Add to favorites'"><mat-icon>{{ isFavorite(group) ? 'star' : 'star_border' }}</mat-icon></button>
+            <button (click)="toggleMuted(group, $event)" [class.active]="isMuted(group)" [matTooltip]="isMuted(group) ? 'Unmute' : 'Mute'"><mat-icon>{{ isMuted(group) ? 'notifications_off' : 'notifications_none' }}</mat-icon></button>
+          </div>
+          <div class="conversation-meta">
+            <span class="conversation-time" *ngIf="group.last_message_at">{{ formatLastMessageTime(group.last_message_at) }}</span>
+            <span class="unread-badge" *ngIf="group.unread_count && group.unread_count > 0">{{ group.unread_count > 99 ? '99+' : group.unread_count }}</span>
+            <span class="needs-response-count" *ngIf="group.needs_response_count && group.needs_response_count > 0">! {{ group.needs_response_count }}</span>
+          </div>
           <span class="mention-badge" *ngIf="group.has_mention">@</span>
         </li>
         <li class="empty-state" *ngIf="groupChats.length === 0 && !searchQuery">
@@ -377,6 +381,9 @@
         </li>
         <li class="empty-state" *ngIf="groupChats.length === 0 && searchQuery">
           <span>No groups match your search</span>
+        </li>
+        <li class="show-all-row" *ngIf="!searchQuery && groupCount > 15">
+          <button (click)="toggleShowAll('groups')">{{ showAllGroups ? 'Show fewer' : 'See all groups' }}</button>
         </li>
       </ul>
     </div>
@@ -448,6 +455,7 @@
           class="channel-item dm-item"
           [class.selected]="isSelected(dm)"
           [class.unread]="dm.unread_count && dm.unread_count > 0"
+          [class.muted]="isMuted(dm)"
           (click)="selectChannel(dm)"
         >
           <div class="dm-avatar">
@@ -467,6 +475,11 @@
             <span class="unread-badge" *ngIf="dm.unread_count && dm.unread_count > 0">
               {{ dm.unread_count > 99 ? '99+' : dm.unread_count }}
             </span>
+            <span class="needs-response-count" *ngIf="dm.needs_response_count && dm.needs_response_count > 0">! {{ dm.needs_response_count }}</span>
+          </div>
+          <div class="conversation-actions">
+            <button (click)="toggleFavorite(dm, $event)" [class.active]="isFavorite(dm)" [matTooltip]="isFavorite(dm) ? 'Remove from favorites' : 'Add to favorites'"><mat-icon>{{ isFavorite(dm) ? 'star' : 'star_border' }}</mat-icon></button>
+            <button (click)="toggleMuted(dm, $event)" [class.active]="isMuted(dm)" [matTooltip]="isMuted(dm) ? 'Unmute' : 'Mute'"><mat-icon>{{ isMuted(dm) ? 'notifications_off' : 'notifications_none' }}</mat-icon></button>
           </div>
         </li>
         <li class="empty-state" *ngIf="directMessages.length === 0 && !searchQuery">
@@ -474,6 +487,9 @@
         </li>
         <li class="empty-state" *ngIf="directMessages.length === 0 && searchQuery">
           <span>No DMs match your search</span>
+        </li>
+        <li class="show-all-row" *ngIf="!searchQuery && dmCount > 15">
+          <button (click)="toggleShowAll('dms')">{{ showAllDms ? 'Show fewer' : 'See all direct messages' }}</button>
         </li>
       </ul>
     </div>

@@ -77,6 +77,10 @@ export class GridComponent implements OnInit, OnDestroy {
 
   // Thread panel
   threadParentMessage: GridMessage | null = null;
+
+  // Followed threads live per browser profile, matching the portal.
+  private readonly FOLLOWED_THREADS_KEY = 'gridFollowedThreadIds';
+  private followedThreadIds = new Set<string>();
   threadReplies: GridMessage[] = [];
 
   // Image lightbox
@@ -152,6 +156,7 @@ export class GridComponent implements OnInit, OnDestroy {
     // Set currentUserId AFTER loadUsers so we can get the document ID
     this.currentUserId = this.getCurrentUserDocId();
     this.setupWebSocketSubscriptions();
+    this.followedThreadIds = this.loadFollowedThreadIds();
     this.loadChannels();
 
     // Initialize idle monitoring and connect WebSocket
@@ -591,6 +596,50 @@ export class GridComponent implements OnInit, OnDestroy {
         } else {
           console.error('Grid: Channel notification has no channel ID, skipping');
         }
+      });
+
+    // Needs Response state changes, for everyone viewing the conversation
+    this.gridWs.messageNeedsResponseUpdated$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ message, channelId, channelNeedsResponseCount }) => {
+        this.applyNeedsResponseMessage(message);
+        this.channelListRef?.updateNeedsResponseActivityState(message.id, !!message.needs_response);
+        if (typeof channelNeedsResponseCount === 'number' && Number.isFinite(channelNeedsResponseCount)) {
+          this.channels = this.channels.map(channel =>
+            channel.id === channelId
+              ? { ...channel, needs_response_count: channelNeedsResponseCount }
+              : channel
+          );
+        }
+        this.cdr.markForCheck();
+      });
+
+    // Targeted Needs Response requests, delivered only to the people asked
+    this.gridWs.needsResponseNotification$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ message, channelId, requesterId, channelNeedsResponseCount }) => {
+        if (!channelId || requesterId === this.currentUserId) return;
+        this.applyNeedsResponseMessage(message);
+        this.channels = this.channels.map(channel =>
+          channel.id === channelId
+            ? {
+                ...channel,
+                needs_response_count:
+                  typeof channelNeedsResponseCount === 'number' && Number.isFinite(channelNeedsResponseCount)
+                    ? channelNeedsResponseCount
+                    : Math.max(channel.needs_response_count || 0, 1),
+              }
+            : channel
+        );
+        this.channelListRef?.addActivityFromNotification(channelId, message, requesterId, 'needs_response');
+        const channel = this.channels.find(c => c.id === channelId);
+        const where = channel?.name ? `#${channel.name}` : 'a conversation';
+        this.gridNotification.showNotification(
+          `Response requested in ${where}`,
+          message?.content || '',
+          'needs_response',
+          channelId
+        );
       });
 
     // Mention notifications - when user is @mentioned
@@ -1597,15 +1646,12 @@ export class GridComponent implements OnInit, OnDestroy {
     return this.currentChannel.created_by_id !== this.currentUserId;
   }
 
-  /**
-   * Check if the current user has read-only access to this conversation.
-   * Unlike reply-only mode this is per-member and also blocks thread replies.
-   * The server is authoritative; this only keeps the UI honest.
-   */
-  isReadOnlyMember(): boolean {
-    if (!this.currentChannel) return false;
-    if (this.currentChannel.created_by_id === this.currentUserId) return false;
-    return this.currentChannel.current_user_posting_permission === 'read_only';
+  /** Composer is hidden when either the member is read-only or the group
+   *  restricts new posts to its owner. */
+  isPostingBlocked(): boolean {
+    if (this.isGroupReadOnly()) return true;
+    if (!this.currentChannel?.is_reply_only) return false;
+    return this.currentChannel.created_by_id !== this.currentUserId;
   }
 
   /**
@@ -1638,7 +1684,9 @@ export class GridComponent implements OnInit, OnDestroy {
    * Send a thread reply via WebSocket (enables mention processing on backend)
    */
   sendThreadReply(content: string): void {
-    if (!this.currentChannel || !this.threadParentMessage || !content.trim()) return;
+    if (!this.currentChannel || !this.threadParentMessage || !content.trim() || this.isGroupReadOnly()) return;
+    // Replying is an implicit subscribe: you now care about this thread.
+    this.followCurrentThread();
 
     const currentUserDocId = this.getCurrentUserDocId();
     if (!currentUserDocId) {
@@ -1976,5 +2024,136 @@ export class GridComponent implements OnInit, OnDestroy {
     const userId = this.currentChannel?.dm_user?.user_id;
     if (!userId) return false;
     return this.presenceMap.get(userId) ?? this.currentChannel?.dm_user?.is_online ?? false;
+  }
+
+  isGroupReadOnly(): boolean {
+    return this.currentChannel?.channel_type === 'group'
+      && this.currentChannel.current_user_posting_permission === 'read_only';
+  }
+
+  private loadFollowedThreadIds(): Set<string> {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(this.FOLLOWED_THREADS_KEY) || '[]');
+      return new Set(Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : []);
+    } catch {
+      return new Set<string>();
+    }
+  }
+
+  private isThreadFollowed(messageId: string | null | undefined): boolean {
+    return !!messageId && this.followedThreadIds.has(messageId);
+  }
+
+  isCurrentThreadFollowed(): boolean {
+    return this.isThreadFollowed(this.threadParentMessage?.id);
+  }
+
+  toggleCurrentThreadFollow(): void {
+    const messageId = this.threadParentMessage?.id;
+    if (!messageId) return;
+    if (this.followedThreadIds.has(messageId)) this.followedThreadIds.delete(messageId);
+    else this.followedThreadIds.add(messageId);
+    this.persistFollowedThreadIds();
+    this.cdr.markForCheck();
+  }
+
+  onGroupOwnershipTransferred(newOwnerUserId: string): void {
+    if (!this.currentChannel) return;
+    const channelId = this.currentChannel.id;
+    this.channels = this.channels.map(channel =>
+      channel.id === channelId ? { ...channel, created_by_id: newOwnerUserId } : channel
+    );
+    this.currentChannel = { ...this.currentChannel, created_by_id: newOwnerUserId };
+    this.cdr.markForCheck();
+  }
+
+  onPostingPermissionsChanged(): void {
+    if (!this.currentChannel) return;
+    const channelId = this.currentChannel.id;
+    this.gridApi.getChannel(channelId).subscribe({
+      next: (freshChannel) => {
+        this.channels = this.channels.map(channel => channel.id === channelId ? { ...channel, ...freshChannel } : channel);
+        this.currentChannel = { ...this.currentChannel!, ...freshChannel };
+        this.cdr.markForCheck();
+      },
+      error: (error) => console.error('Error refreshing group posting permissions:', error),
+    });
+  }
+
+  onMarkUnreadRequested(message: GridMessage): void {
+    const channelId = message.channel || this.currentChannel?.id;
+    if (!channelId) return;
+
+    this.channels = this.channels.map(channel =>
+      channel.id === channelId ? { ...channel, unread_count: Math.max(channel.unread_count || 0, 1) } : channel
+    );
+    this.unreadCountOnEntry = Math.max(this.unreadCountOnEntry, 1);
+    this.cdr.markForCheck();
+
+    this.gridApi.markAsUnread(channelId, message.id).subscribe({
+      error: (error) => {
+        console.error('Error marking conversation unread:', error);
+        this.channels = this.channels.map(channel =>
+          channel.id === channelId ? { ...channel, unread_count: 0 } : channel
+        );
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  onNeedsResponseToggled(message: GridMessage): void {
+    if (!this.currentUserId || message.user_id !== this.currentUserId) return;
+    if (message.pending || message.error || message.id.startsWith('temp_')) return;
+
+    const needsResponse = !message.needs_response;
+    const optimistic: GridMessage = {
+      ...message,
+      needs_response: needsResponse,
+      response_requested_at: needsResponse ? new Date().toISOString() : null,
+      response_requested_by_user_id: needsResponse ? this.currentUserId : null,
+      response_received_at: needsResponse ? null : new Date().toISOString(),
+    };
+    this.applyNeedsResponseMessage(optimistic);
+
+    this.gridApi.setMessageNeedsResponse(message.id, needsResponse).subscribe({
+      next: (response) => {
+        if (response?.message) this.applyNeedsResponseMessage(response.message);
+        const channelId = response?.message?.channel || message.channel || this.currentChannel?.id;
+        if (channelId && Number.isFinite(response?.channel_needs_response_count)) {
+          this.channels = this.channels.map(channel =>
+            channel.id === channelId
+              ? { ...channel, needs_response_count: response.channel_needs_response_count }
+              : channel
+          );
+        }
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error updating Needs Response:', error);
+        this.applyNeedsResponseMessage(message);
+      },
+    });
+  }
+
+  private applyNeedsResponseMessage(message: GridMessage): void {
+    this.messages = this.messages.map(item => item.id === message.id ? { ...item, ...message } : item);
+    if (this.threadParentMessage?.id === message.id) {
+      this.threadParentMessage = { ...this.threadParentMessage, ...message };
+    }
+    this.threadReplies = this.threadReplies.map(item => item.id === message.id ? { ...item, ...message } : item);
+    this.cdr.markForCheck();
+  }
+
+
+  private persistFollowedThreadIds(): void {
+    localStorage.setItem(this.FOLLOWED_THREADS_KEY, JSON.stringify(Array.from(this.followedThreadIds)));
+  }
+
+
+  private followCurrentThread(): void {
+    const messageId = this.threadParentMessage?.id;
+    if (!messageId || this.followedThreadIds.has(messageId)) return;
+    this.followedThreadIds.add(messageId);
+    this.persistFollowedThreadIds();
   }
 }
