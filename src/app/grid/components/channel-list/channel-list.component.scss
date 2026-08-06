@@ -1601,3 +1601,65 @@ $online-green: #2eb67d;
   }
 }
 
+// Always-visible conversation filters. These replaced a tune-icon popup:
+// burying a "someone is waiting on you" count behind two clicks defeats it.
+.conversation-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 12px 10px;
+  border-bottom: 1px solid var(--grid-sidebar-border);
+}
+
+.conversation-filter-chip,
+.mark-read-compact {
+  border: 1px solid var(--grid-sidebar-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--grid-sidebar-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.conversation-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+
+  span {
+    min-width: 16px;
+    padding: 1px 4px;
+    border-radius: 999px;
+    background: #e01e5a;
+    color: #fff;
+    text-align: center;
+  }
+
+  &.active,
+  &:hover {
+    color: var(--grid-sidebar-text);
+    background: var(--grid-sidebar-active);
+  }
+
+  &.needs-response span {
+    background: #e5a100;
+  }
+}
+
+.mark-read-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+
+  mat-icon {
+    font-size: 17px;
+    width: 17px;
+    height: 17px;
+  }
+}

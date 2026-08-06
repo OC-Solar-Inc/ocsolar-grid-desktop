@@ -187,6 +187,22 @@
       <mat-spinner *ngIf="isSearching" diameter="16" class="search-spinner"></mat-spinner>
     </div>
 
+    <div class="conversation-filter-bar">
+      <button class="conversation-filter-chip" [class.active]="messageFilter === 'all'" (click)="setMessageFilter('all')">All</button>
+      <button class="conversation-filter-chip" [class.active]="messageFilter === 'unread'" (click)="setMessageFilter('unread')">
+        Unread
+        <span *ngIf="unreadDmCount + unreadGroupCount + unreadChannelCount > 0">{{ unreadDmCount + unreadGroupCount + unreadChannelCount }}</span>
+      </button>
+      <button class="conversation-filter-chip" [class.active]="messageFilter === 'mentions'" (click)="setMessageFilter('mentions')">@ Mentions</button>
+      <button class="conversation-filter-chip needs-response" [class.active]="messageFilter === 'needs_response'" (click)="setMessageFilter('needs_response')">
+        Needs response
+        <span *ngIf="needsResponseCount > 0">{{ needsResponseCount > 99 ? '99+' : needsResponseCount }}</span>
+      </button>
+      <button class="mark-read-compact" (click)="markAllAsRead()" matTooltip="Mark every conversation read">
+        <mat-icon>done_all</mat-icon>
+      </button>
+    </div>
+
     <!-- Loading State -->
     <div class="loading-state" *ngIf="isLoading">
       <mat-spinner diameter="24"></mat-spinner>
@@ -198,64 +214,8 @@
       <div class="section-header" (click)="isChannelsCollapsed = !isChannelsCollapsed">
         <mat-icon>{{ channelsExpanded ? 'expand_more' : 'chevron_right' }}</mat-icon>
         <span>Channels</span>
-        <div class="section-header-actions">
-          <button
-            class="filter-btn"
-            (click)="toggleFilterPopup(); $event.stopPropagation()"
-            [class.active]="messageFilter !== 'all'"
-            matTooltip="Filter messages"
-          >
-            <mat-icon>tune</mat-icon>
-          </button>
-        </div>
       </div>
 
-      <!-- Filter Popup -->
-      <div class="filter-popup" *ngIf="showFilterPopup" (click)="$event.stopPropagation()">
-        <div class="filter-popup-header">
-          <span>Sort & Filter</span>
-        </div>
-        <div class="filter-popup-options">
-          <div
-            class="filter-option"
-            [class.selected]="messageFilter === 'all'"
-            (click)="setMessageFilter('all')"
-          >
-            <mat-icon>inbox</mat-icon>
-            <span>All Messages</span>
-            <mat-icon class="check-icon" *ngIf="messageFilter === 'all'">check</mat-icon>
-          </div>
-          <div
-            class="filter-option"
-            [class.selected]="messageFilter === 'unread'"
-            (click)="setMessageFilter('unread')"
-          >
-            <mat-icon>mark_email_unread</mat-icon>
-            <span>Unread Only</span>
-            <mat-icon class="check-icon" *ngIf="messageFilter === 'unread'">check</mat-icon>
-          </div>
-          <div
-            class="filter-option"
-            [class.selected]="messageFilter === 'mentions'"
-            (click)="setMessageFilter('mentions')"
-          >
-            <mat-icon>alternate_email</mat-icon>
-            <span>Mentions Only</span>
-            <mat-icon class="check-icon" *ngIf="messageFilter === 'mentions'">check</mat-icon>
-          </div>
-          <div class="filter-divider"></div>
-          <div
-            class="filter-option action-option"
-            (click)="markAllAsRead()"
-          >
-            <mat-icon>done_all</mat-icon>
-            <span>Mark all as read</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Filter Popup Backdrop -->
-      <div class="filter-popup-backdrop" *ngIf="showFilterPopup" (click)="toggleFilterPopup()"></div>
       <ul class="channel-items" *ngIf="channelsExpanded">
         <li
           *ngFor="let channel of publicChannels"

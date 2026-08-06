@@ -308,6 +308,15 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   get publicChannelCount(): number { return this.publicChannelCandidates().length; }
   get groupCount(): number { return this.groupCandidates().length; }
   get dmCount(): number { return this.dmCandidates().length; }
+  get unreadChannelCount(): number {
+    return this.channels.filter(c => (c.channel_type === 'public' || c.channel_type === 'private') && (c.unread_count || 0) > 0).length;
+  }
+  get unreadGroupCount(): number {
+    return this.channels.filter(c => c.channel_type === 'group' && (c.unread_count || 0) > 0).length;
+  }
+  get unreadDmCount(): number {
+    return this.channels.filter(c => (c.channel_type === 'dm' || c.channel_type === 'direct') && (c.unread_count || 0) > 0).length;
+  }
   get needsResponseCount(): number {
     return this.channels.reduce((total, channel) => total + (channel.needs_response_count || 0), 0);
   }
@@ -455,12 +464,6 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   // Filter Methods
   // =====================
 
-  toggleFilterPopup(): void {
-    this.showFilterPopup = !this.showFilterPopup;
-    this.showDmForm = false;
-    this.showCreateForm = false;
-    this.showSettingsPopup = false;
-  }
 
   // =====================
   // Settings/Theme Methods
@@ -496,9 +499,8 @@ export class ChannelListComponent implements OnInit, OnDestroy {
     this.gridNotification.setPreference(type, !current);
   }
 
-  setMessageFilter(filter: 'all' | 'mentions' | 'unread'): void {
+  setMessageFilter(filter: 'all' | 'mentions' | 'unread' | 'needs_response'): void {
     this.messageFilter = filter;
-    this.showFilterPopup = false;
   }
 
   markAllAsRead(): void {
