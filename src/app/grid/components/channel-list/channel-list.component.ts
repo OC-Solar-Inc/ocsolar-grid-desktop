@@ -742,7 +742,8 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   loadActivity(): void {
     this.isLoadingActivity = true;
     const unreadOnly = this.activityFilter === 'unread';
-    this.gridApi.getActivity(unreadOnly, 50).subscribe({
+    const needsResponseOnly = this.activityFilter === 'needs_response';
+    this.gridApi.getActivity(unreadOnly, 50, needsResponseOnly).subscribe({
       next: (items) => {
         // Preserve real-time WebSocket items not already in API response (dedup by message_id)
         const apiMessageIds = new Set(items.map(i => i.message_id).filter(Boolean));
@@ -776,9 +777,19 @@ export class ChannelListComponent implements OnInit, OnDestroy {
     });
   }
 
-  setActivityFilter(filter: 'all' | 'unread'): void {
+  setActivityFilter(filter: 'all' | 'unread' | 'mentions' | 'replies' | 'needs_response'): void {
     this.activityFilter = filter;
     this.loadActivity();
+  }
+
+  /** Mentions, replies and needs-response are narrowed client-side; unread and
+   *  needs-response are also pushed to the API so the server can filter. */
+  get displayedActivityItems(): GridActivityItem[] {
+    if (this.activityFilter === 'unread') return this.activityItems.filter(item => !item.is_read);
+    if (this.activityFilter === 'mentions') return this.activityItems.filter(item => !item.event_type || item.event_type === 'mention');
+    if (this.activityFilter === 'replies') return this.activityItems.filter(item => item.event_type === 'reply');
+    if (this.activityFilter === 'needs_response') return this.activityItems.filter(item => item.event_type === 'needs_response' && item.needs_response !== false);
+    return this.activityItems;
   }
 
   markAllActivityRead(): void {
@@ -796,12 +807,36 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   }
 
   onActivityItemClick(item: GridActivityItem): void {
-    // Mark all activity items for this channel as read (not just the clicked one)
-    this.markActivityReadForChannel(item.channel_id);
+    this.markActivityItemRead(item.id);
 
     // Emit selected event and switch back to channel view
     this.activityItemSelected.emit({ channelId: item.channel_id, messageId: item.message_id });
     this.showActivityView = false;
+    this.cdr.markForCheck();
+  }
+
+  /** Only the opened item goes read; the rest of the conversation's history
+   *  stays in the feed. Synthetic ws_ items exist client-side only. */
+  private markActivityItemRead(itemId: string): void {
+    this.activityItems = this.activityItems.map(item =>
+      item.id === itemId ? { ...item, is_read: true } : item
+    );
+    this.unreadActivityCount = this.activityItems.filter(item => !item.is_read).length;
+    if (!itemId.startsWith('ws_')) {
+      this.gridApi.markActivityRead(itemId).subscribe({
+        error: () => this.loadActivity(),
+      });
+    }
+  }
+
+  /** Reflects an open/closed response request in the feed without a reload. */
+  updateNeedsResponseActivityState(messageId: string, needsResponse: boolean): void {
+    this.activityItems = this.activityItems.map(item =>
+      item.message_id === messageId && item.event_type === 'needs_response'
+        ? { ...item, needs_response: needsResponse, is_read: needsResponse ? item.is_read : true }
+        : item
+    );
+    this.unreadActivityCount = this.activityItems.filter(item => !item.is_read).length;
     this.cdr.markForCheck();
   }
 
@@ -817,6 +852,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   }
 
   getActivityChannelIcon(item: GridActivityItem): string {
+    if (item.event_type === 'needs_response') return 'priority_high';
     switch (item.channel_type) {
       case 'dm':
       case 'direct':

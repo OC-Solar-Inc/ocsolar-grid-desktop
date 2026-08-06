@@ -1663,3 +1663,122 @@ $online-green: #2eb67d;
     height: 17px;
   }
 }
+
+// Conversation-row additions ported from the portal: preview line, meta
+// column, needs-response count and the hover-revealed favourite/mute
+// actions. Re-opens .channel-item so desktop's own rules stay first.
+.channel-item {
+  &.muted {
+    opacity: 0.66;
+  }
+
+  .conversation-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .conversation-preview {
+    color: var(--grid-sidebar-text-muted);
+    font-size: 11px;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .conversation-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  .conversation-actions {
+    display: none;
+    align-items: center;
+    gap: 2px;
+
+    button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--grid-sidebar-text-muted);
+      cursor: pointer;
+
+      &:hover,
+      &.active {
+        color: var(--grid-sidebar-text);
+        background: var(--grid-sidebar-border);
+      }
+
+      mat-icon {
+        font-size: 15px;
+        width: 15px;
+        height: 15px;
+      }
+    }
+  }
+
+  .conversation-time {
+    color: var(--grid-sidebar-text-muted);
+    font-size: 10px;
+    font-weight: 400;
+  }
+
+  .needs-response-count {
+    background: #e5a100;
+    color: #1d1c1d;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+
+  .unread-badge {
+    background: #e01e5a;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+  }
+
+  .mention-badge {
+    background: #e01e5a;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+  }
+}
+
+.show-all-row {
+  list-style: none;
+  padding: 4px 16px 8px 48px;
+
+  button {
+    padding: 3px 0;
+    border: none;
+    background: transparent;
+    color: var(--grid-sidebar-text);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+}
