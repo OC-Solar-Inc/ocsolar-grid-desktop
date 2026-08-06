@@ -243,12 +243,22 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     if (!this.canModify(message)) return false;
     if (message.needs_response) return true;
     if (this.channelType === 'dm' || this.channelType === 'direct') return true;
-    return /<@[A-Za-z0-9_-]+>/.test(message.content || '');
+    return this.mentionedRecipients(message).length > 0;
+  }
+
+  /** Mentioned users excluding the author: you cannot ask yourself for a
+   *  response, and the server rejects a request with no other recipient. */
+  private mentionedRecipients(message: GridMessage): string[] {
+    const ids = [...(message.content || '').matchAll(/<@([A-Za-z0-9_-]+)>/g)].map(m => m[1]);
+    return ids.filter(id => id !== message.user_id);
   }
 
   getNeedsResponseTooltip(message: GridMessage): string {
     if (message.needs_response) return 'Mark response received';
     if (this.canToggleNeedsResponse(message)) return 'Request a response';
+    if (/<@[A-Za-z0-9_-]+>/.test(message.content || '')) {
+      return 'Mention someone other than yourself to request a response';
+    }
     return 'Mention at least one person before requesting a response';
   }
 
