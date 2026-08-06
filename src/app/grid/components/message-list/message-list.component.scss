@@ -861,3 +861,35 @@ $error-color: #e01e5a;
     }
   }
 }
+
+// Needs Response, ported from the portal: amber marks an open request.
+.needs-response-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  margin-left: 6px;
+  padding: 3px 8px;
+  background: rgba(255, 179, 0, 0.14);
+  color: #e5a100;
+  border: 1px solid rgba(255, 179, 0, 0.28);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.message-actions .action-button {
+  &.needs-response-action.active {
+    background: rgba(255, 179, 0, 0.16);
+
+    mat-icon {
+      color: #e5a100;
+    }
+  }
+}

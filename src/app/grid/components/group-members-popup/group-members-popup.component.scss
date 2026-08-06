@@ -593,3 +593,183 @@
     animation: spin 1s linear infinite;
   }
 }
+
+// Member-row layout ported from the portal: identity | settings | actions,
+// with both selects sharing a width so their edges align. Re-opens the
+// selectors so desktop's own rules stay first.
+.member-access-controls {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.role-management {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  select {
+    width: 100%;
+    padding: 5px 22px 5px 8px;
+    border: 1px solid var(--grid-chat-border, rgba(255, 255, 255, 0.16));
+    border-radius: 5px;
+    background: var(--grid-chat-input-bg, rgba(0, 0, 0, 0.2));
+    color: var(--grid-chat-text, #e5e5e5);
+    font-size: 12px;
+    cursor: pointer;
+
+    &:focus {
+      outline: 2px solid var(--grid-chat-accent, #4a9eff);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+  }
+
+  .role-spinner {
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+    color: var(--grid-chat-accent, #4a9eff);
+  }
+}
+
+.posting-permission-control {
+  width: 116px; // fits the longest option, "Read-only"
+}
+
+.posting-permission-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  select {
+    width: 100%;
+    padding: 5px 24px 5px 8px;
+    border: 1px solid var(--grid-chat-border, rgba(255, 255, 255, 0.16));
+    border-radius: 5px;
+    background: var(--grid-chat-input-bg, rgba(0, 0, 0, 0.2));
+    color: var(--grid-chat-text, #e5e5e5);
+    font-size: 12px;
+    cursor: pointer;
+
+    &:focus {
+      outline: 2px solid var(--grid-chat-accent, #4a9eff);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+  }
+
+  .permission-spinner {
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+    color: var(--grid-chat-accent, #4a9eff);
+  }
+}
+
+.posting-permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--grid-chat-border, rgba(255, 255, 255, 0.16));
+  color: var(--grid-chat-text-muted, #9a9a9a);
+  font-size: 11px;
+  white-space: nowrap;
+
+  &.read-only {
+    border-color: rgba(180, 83, 9, 0.5);
+    color: #b45309;
+  }
+
+  mat-icon {
+    font-size: 13px;
+    width: 13px;
+    height: 13px;
+  }
+}
+
+.member-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 58px; // two 28px buttons; keeps every row's right edge aligned
+}
+
+.transfer-owner-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--grid-chat-text-muted, #9a9a9a);
+  transition: color 0.15s ease, background 0.15s ease;
+
+  mat-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    font-size: 17px;
+  }
+
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    color: #c84a00;
+    background: rgba(200, 74, 0, 0.12);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+  }
+}
+
+.member-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 12px;
+  padding: 10px 16px;
+  transition: background 0.15s ease;
+
+  & + .member-item {
+    border-top: 1px solid var(--grid-chat-border, rgba(255, 255, 255, 0.08));
+  }
+
+  &:hover {
+    background: var(--grid-chat-hover, rgba(255, 255, 255, 0.05));
+  }
+}
+
+.member-role {
+  width: fit-content;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grid-chat-text-muted, #9a9a9a);
+
+  // Owner is the only role worth a colour: there is exactly one, and it is
+  // the row you cannot remove. The accent token is tuned per theme, so this
+  // clears 4.5:1 on the light and dark grounds alike — a fixed orange would
+  // land at 3.4:1 on the dark popup.
+  &.role-owner {
+    color: var(--grid-chat-accent, #4a9eff);
+    font-weight: 700;
+  }
+}

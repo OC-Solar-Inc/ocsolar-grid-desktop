@@ -76,21 +76,77 @@
           {{ getMemberDisplayName(member) }}
           <span *ngIf="member.user_id === currentUserId" class="you-badge">(you)</span>
         </span>
-        <span class="member-role" [ngClass]="getRoleBadgeClass(member.role)">
+        <span
+          class="member-role"
+          *ngIf="!canManageRole(member)"
+          [ngClass]="getRoleBadgeClass(member.role)"
+        >
           {{ member.role }}
         </span>
       </div>
 
-      <!-- Remove Button -->
-      <button
-        *ngIf="canRemoveMember(member)"
-        mat-icon-button
-        class="remove-button"
-        (click)="removeMember(member)"
-        matTooltip="Remove from group"
-      >
-        <mat-icon>close</mat-icon>
-      </button>
+      <div class="member-access-controls">
+        <div class="role-management" *ngIf="canManageRole(member)">
+          <select
+            [ngModel]="member.role"
+            (ngModelChange)="onMemberRoleChange(member, $event)"
+            [disabled]="isUpdatingRole(member) || !!transferringOwnershipTo"
+            [attr.aria-label]="'Group role for ' + getMemberDisplayName(member)"
+          >
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+          <mat-icon *ngIf="isUpdatingRole(member)" class="role-spinner spinning">sync</mat-icon>
+        </div>
+
+        <div class="posting-permission-control" *ngIf="canManagePostingPermission(member); else permissionLabel">
+          <select
+            [ngModel]="member.posting_permission || 'can_post'"
+            (ngModelChange)="onPostingPermissionChange(member, $event)"
+            [disabled]="isUpdatingPostingPermission(member)"
+            [attr.aria-label]="'Posting permission for ' + getMemberDisplayName(member)"
+          >
+            <option value="can_post">Can post</option>
+            <option value="read_only">Read-only</option>
+          </select>
+          <mat-icon *ngIf="isUpdatingPostingPermission(member)" class="permission-spinner spinning">sync</mat-icon>
+        </div>
+        <ng-template #permissionLabel>
+          <span
+            class="posting-permission-badge"
+            *ngIf="member.role !== 'owner'"
+            [class.read-only]="member.posting_permission === 'read_only'"
+          >
+            <mat-icon>{{ member.posting_permission === 'read_only' ? 'visibility' : 'edit' }}</mat-icon>
+            {{ getPostingPermissionLabel(member) }}
+          </span>
+        </ng-template>
+      </div>
+
+      <!-- Rare / destructive actions -->
+      <div class="member-actions">
+        <button
+          *ngIf="canManageRole(member)"
+          mat-icon-button
+          class="transfer-owner-button"
+          [disabled]="!!transferringOwnershipTo"
+          (click)="transferOwnership(member)"
+          [matTooltip]="'Transfer ownership to ' + getMemberDisplayName(member)"
+          [attr.aria-label]="'Transfer ownership to ' + getMemberDisplayName(member)"
+        >
+          <mat-icon>{{ transferringOwnershipTo === member.user_id ? 'sync' : 'swap_horiz' }}</mat-icon>
+        </button>
+        <button
+          *ngIf="canRemoveMember(member)"
+          mat-icon-button
+          class="remove-button"
+          (click)="removeMember(member)"
+          matTooltip="Remove from group"
+          [attr.aria-label]="'Remove ' + getMemberDisplayName(member) + ' from group'"
+        >
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
     </div>
   </div>
 
