@@ -219,17 +219,24 @@
             >
               <mat-icon>mark_chat_unread</mat-icon>
             </button>
-            <button
+            <!-- Tooltip lives on the wrapper: a disabled button swallows
+                 pointer events, so the reason it is disabled would never
+                 be readable. -->
+            <span
               *ngIf="canModify(message)"
-              mat-icon-button
-              class="action-button needs-response-action"
-              [class.active]="message.needs_response"
-              [disabled]="!canToggleNeedsResponse(message)"
+              class="action-tooltip-wrap"
               [matTooltip]="getNeedsResponseTooltip(message)"
-              (click)="toggleNeedsResponse(message)"
             >
-              <mat-icon>{{ message.needs_response ? 'task_alt' : 'priority_high' }}</mat-icon>
-            </button>
+              <button
+                mat-icon-button
+                class="action-button needs-response-action"
+                [class.active]="message.needs_response"
+                [disabled]="!canToggleNeedsResponse(message)"
+                (click)="toggleNeedsResponse(message)"
+              >
+                <mat-icon>{{ message.needs_response ? 'task_alt' : 'priority_high' }}</mat-icon>
+              </button>
+            </span>
             <button
               *ngIf="message.content"
               mat-icon-button

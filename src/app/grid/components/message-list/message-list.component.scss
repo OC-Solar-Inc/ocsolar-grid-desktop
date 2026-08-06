@@ -893,3 +893,10 @@ $error-color: #e01e5a;
     }
   }
 }
+
+// Carries the tooltip for a disabled action button, which cannot show one
+// itself because it receives no pointer events.
+.action-tooltip-wrap {
+  display: inline-flex;
+  align-items: center;
+}
