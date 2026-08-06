@@ -13,7 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { GridApiService } from '../../services/grid-api.service';
-import { GridChannelMember, GridMemberRole } from '../../interfaces/grid.interface';
+import { GridChannelMember, GridMemberRole, GridPostingPermission } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 
 @Component({
@@ -37,12 +37,15 @@ export class GroupMembersPopupComponent implements OnInit {
   @Input() userMap = new Map<string, User>();
   @Input() currentUserId: string | null = null;
   @Input() isReplyOnly = false;
+  @Input() channelOwnerId: string = '';
 
   @Output() close = new EventEmitter<void>();
   @Output() membersChanged = new EventEmitter<void>();
   @Output() replyOnlyToggled = new EventEmitter<void>();
   @Output() groupRenamed = new EventEmitter<string>();
   @Output() groupDeleted = new EventEmitter<void>();
+  @Output() postingPermissionsChanged = new EventEmitter<void>();
+  @Output() ownershipTransferred = new EventEmitter<string>();
 
   members: GridChannelMember[] = [];
   isLoading = true;
@@ -57,6 +60,9 @@ export class GroupMembersPopupComponent implements OnInit {
   editableName = '';
   isRenaming = false;
   isDeleting = false;
+  updatingPermissionFor = new Set<string>();
+  updatingRoleFor = new Set<string>();
+  transferringOwnershipTo: string | null = null;
 
   constructor(
     private gridApi: GridApiService,
@@ -74,7 +80,12 @@ export class GroupMembersPopupComponent implements OnInit {
     this.isLoading = true;
     this.gridApi.getChannelMembers(this.channelId).subscribe({
       next: (members) => {
-        this.members = members;
+        this.members = members.map(member => ({
+          ...member,
+          posting_permission: member.role === 'owner'
+            ? 'can_post'
+            : (member.posting_permission || 'can_post'),
+        }));
         // Find current user's role
         const currentMember = members.find(m => m.user_id === this.currentUserId);
         this.currentUserRole = currentMember?.role || null;
@@ -138,23 +149,156 @@ export class GroupMembersPopupComponent implements OnInit {
    * Check if current user can remove a member
    */
   canRemoveMember(member: GridChannelMember): boolean {
-    // Only the group creator (owner) can remove members
-    if (!this.isOwner()) return false;
-
     // Cannot remove yourself via this UI (use Leave)
     if (member.user_id === this.currentUserId) return false;
 
     // Cannot remove the owner
     if (member.role === 'owner') return false;
 
-    return true;
+    // Owners can remove admins or members. Admins can remove regular members.
+    return this.isOwner() || (this.isAdmin() && member.role === 'member');
   }
 
   /**
-   * Check if current user can add members (creator/owner only)
+   * Check if current user can add members
    */
   canAddMembers(): boolean {
-    return this.isOwner();
+    return this.isOwner() || this.isAdmin();
+  }
+
+  canManagePostingPermission(member: GridChannelMember): boolean {
+    if (member.role === 'owner') return false;
+    if (this.isOwner()) return true;
+    return this.isAdmin() && member.role === 'member';
+  }
+
+  isUpdatingPostingPermission(member: GridChannelMember): boolean {
+    return this.updatingPermissionFor.has(member.user_id);
+  }
+
+  getPostingPermissionLabel(member: GridChannelMember): string {
+    if (member.role === 'owner') return 'Owner · can post';
+    return member.posting_permission === 'read_only' ? 'Read-only' : 'Can post';
+  }
+
+  onPostingPermissionChange(member: GridChannelMember, value: string): void {
+    if (!this.canManagePostingPermission(member) || this.isUpdatingPostingPermission(member)) return;
+    const postingPermission: GridPostingPermission = value === 'read_only' ? 'read_only' : 'can_post';
+    const previous = member.posting_permission || 'can_post';
+    if (previous === postingPermission) return;
+
+    this.updatingPermissionFor.add(member.user_id);
+    this.members = this.members.map(item =>
+      item.user_id === member.user_id ? { ...item, posting_permission: postingPermission } : item
+    );
+    this.cdr.markForCheck();
+
+    this.gridApi.updateMemberPostingPermission(this.channelId, member.user_id, postingPermission).subscribe({
+      next: (updatedMember) => {
+        this.members = this.members.map(item =>
+          item.user_id === member.user_id
+            ? { ...item, ...updatedMember, posting_permission: updatedMember.posting_permission || postingPermission }
+            : item
+        );
+        this.updatingPermissionFor.delete(member.user_id);
+        this.postingPermissionsChanged.emit();
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error updating member posting permission:', error);
+        this.members = this.members.map(item =>
+          item.user_id === member.user_id ? { ...item, posting_permission: previous } : item
+        );
+        this.updatingPermissionFor.delete(member.user_id);
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  canManageRole(member: GridChannelMember): boolean {
+    return this.isOwner()
+      && member.role !== 'owner'
+      && member.user_id !== this.currentUserId;
+  }
+
+  isUpdatingRole(member: GridChannelMember): boolean {
+    return this.updatingRoleFor.has(member.user_id);
+  }
+
+  onMemberRoleChange(member: GridChannelMember, value: string): void {
+    if (!this.canManageRole(member) || this.isUpdatingRole(member)) return;
+    const role: 'admin' | 'member' = value === 'admin' ? 'admin' : 'member';
+    const previousRole = member.role;
+    if (previousRole === role) return;
+
+    this.updatingRoleFor.add(member.user_id);
+    this.members = this.members.map(item =>
+      item.user_id === member.user_id ? { ...item, role } : item
+    );
+    this.cdr.markForCheck();
+
+    this.gridApi.updateGroupMemberRole(this.channelId, member.user_id, role).subscribe({
+      next: (updatedMember) => {
+        this.members = this.members.map(item =>
+          item.user_id === member.user_id ? { ...item, ...updatedMember, role } : item
+        );
+        this.updatingRoleFor.delete(member.user_id);
+        this.membersChanged.emit();
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error updating group member role:', error);
+        this.members = this.members.map(item =>
+          item.user_id === member.user_id ? { ...item, role: previousRole } : item
+        );
+        this.updatingRoleFor.delete(member.user_id);
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  canTransferOwnership(member: GridChannelMember): boolean {
+    return this.isOwner()
+      && member.role !== 'owner'
+      && member.user_id !== this.currentUserId
+      && !this.transferringOwnershipTo;
+  }
+
+  transferOwnership(member: GridChannelMember): void {
+    if (!this.canTransferOwnership(member)) return;
+    const newOwnerName = this.getMemberDisplayName(member);
+    const confirmed = window.confirm(
+      `Transfer ownership of "${this.channelName || 'this group'}" to ${newOwnerName}? You will become an admin and only the new owner can transfer ownership again.`
+    );
+    if (!confirmed) return;
+
+    this.transferringOwnershipTo = member.user_id;
+    this.cdr.markForCheck();
+    this.gridApi.transferGroupOwnership(this.channelId, member.user_id).subscribe({
+      next: (response) => {
+        const previousOwnerId = this.currentUserId;
+        this.channelOwnerId = member.user_id;
+        this.members = this.members.map(item => {
+          if (item.user_id === member.user_id) {
+            return { ...item, ...response.new_owner, role: 'owner', posting_permission: 'can_post' };
+          }
+          if (item.user_id === previousOwnerId) {
+            return { ...item, ...response.previous_owner, role: 'admin', posting_permission: 'can_post' };
+          }
+          return item;
+        });
+        this.currentUserRole = 'admin';
+        this.transferringOwnershipTo = null;
+        this.ownershipTransferred.emit(member.user_id);
+        this.membersChanged.emit();
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error transferring group ownership:', error);
+        this.transferringOwnershipTo = null;
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   /**
@@ -287,10 +431,14 @@ export class GroupMembersPopupComponent implements OnInit {
   }
 
   /**
-   * Check if current user is the group owner
+   * Check if current user is the channel owner
    */
   isOwner(): boolean {
-    return this.currentUserRole === 'owner';
+    return !!this.currentUserId && this.currentUserId === this.channelOwnerId;
+  }
+
+  isAdmin(): boolean {
+    return this.currentUserRole === 'admin';
   }
 
   /**
@@ -369,8 +517,9 @@ export class GroupMembersPopupComponent implements OnInit {
    * Toggle reply-only mode (owner only)
    */
   onToggleReplyOnly(): void {
-    if (!this.isOwner()) return;
+    this.isReplyOnly = !this.isReplyOnly;
     this.replyOnlyToggled.emit();
+    this.cdr.markForCheck();
   }
 
   /**

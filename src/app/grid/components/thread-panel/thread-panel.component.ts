@@ -33,10 +33,13 @@ export class ThreadPanelComponent implements OnChanges {
   @Input() userMap: Map<string, User> = new Map();
   @Input() channelId = '';
   @Input() channel: GridChannel | null = null;
+  @Input() readOnly = false;
+  @Input() followed = false;
 
   @Output() close = new EventEmitter<void>();
   @Output() replySent = new EventEmitter<string>();
   @Output() imagePreview = new EventEmitter<GridMessageAttachment>();
+  @Output() followToggled = new EventEmitter<void>();
 
   @ViewChild('replyInput') replyInput!: ElementRef<HTMLTextAreaElement>;
 
@@ -63,6 +66,18 @@ export class ThreadPanelComponent implements OnChanges {
     if (changes['channelId'] && !changes['channelId'].firstChange) {
       this.closeMentionDropdown();
       this.mentionMap.clear();
+    }
+    // When the user opens a different thread (or closes & reopens on a
+    // different parent), clear any in-flight draft so it can't be sent to
+    // the wrong parent message. firstChange skips the initial bind, which
+    // already starts with empty state.
+    if (changes['parentMessage'] && !changes['parentMessage'].firstChange) {
+      this.replyContent = '';
+      this.mentionMap.clear();
+      this.closeMentionDropdown();
+      if (this.replyInput) {
+        this.replyInput.nativeElement.style.height = 'auto';
+      }
     }
   }
 
@@ -103,17 +118,10 @@ export class ThreadPanelComponent implements OnChanges {
     }
   }
 
-  /**
-   * The API reports the caller's effective permission on the channel and always
-   * reports can_post for the owner, so this needs no separate owner check.
-   */
-  get isReadOnly(): boolean {
-    return this.channel?.current_user_posting_permission === 'read_only';
-  }
-
   sendReply(): void {
+    if (this.readOnly) return;
     const content = this.replyContent.trim();
-    if (!content || this.isReadOnly) return;
+    if (!content) return;
 
     // Convert display-format mentions (@[Name]) to backend format (<@userId>)
     const contentWithMentions = this.mentionService.convertMentionsForSend(content, this.mentionMap);
@@ -127,6 +135,10 @@ export class ThreadPanelComponent implements OnChanges {
     if (this.replyInput) {
       this.replyInput.nativeElement.style.height = 'auto';
     }
+  }
+
+  onToggleFollow(): void {
+    this.followToggled.emit();
   }
 
   onInput(): void {
@@ -243,17 +255,13 @@ export class ThreadPanelComponent implements OnChanges {
   }
 
   /**
-   * Get display name for a message - uses userMap, falls back to slack_user_name
+   * Get display name for a message - uses userMap
    */
   getDisplayName(message: GridMessage): string {
     // Try to get from userMap (Firebase users)
     if (message.user_id && this.userMap.has(message.user_id)) {
       const user = this.userMap.get(message.user_id)!;
       return user.sFullName || `${user.sFirstName || ''} ${user.sLastName || ''}`.trim() || 'Unknown User';
-    }
-    // Fall back to slack_user_name for unmapped Slack users
-    if (message.slack_user_name) {
-      return message.slack_user_name;
     }
     // Fall back to any display_name or username on the message
     return message.display_name || message.username || 'Unknown User';

@@ -87,6 +87,21 @@ export class GridWebsocketService implements OnDestroy {
   private messageResolvedSubject = new Subject<{ message: GridMessage; channelId: string }>();
   public messageResolved$ = this.messageResolvedSubject.asObservable();
 
+  private messageNeedsResponseUpdatedSubject = new Subject<{
+    message: GridMessage;
+    channelId: string;
+    channelNeedsResponseCount?: number;
+  }>();
+  public messageNeedsResponseUpdated$ = this.messageNeedsResponseUpdatedSubject.asObservable();
+
+  private needsResponseNotificationSubject = new Subject<{
+    message: GridMessage;
+    channelId: string;
+    requesterId: string;
+    channelNeedsResponseCount?: number;
+  }>();
+  public needsResponseNotification$ = this.needsResponseNotificationSubject.asObservable();
+
   private reactionUpdatedSubject = new Subject<{ messageId: string; channelId: string; reactions: GridMessageReaction[] }>();
   public reactionUpdated$ = this.reactionUpdatedSubject.asObservable();
 
@@ -327,6 +342,29 @@ export class GridWebsocketService implements OnDestroy {
           message: resolvedData.message,
           channelId: resolvedData.channel_id || resolvedData.message?.channel,
         });
+        break;
+
+      case 'message_needs_response_updated':
+        const needsResponseUpdated = data as any;
+        if (needsResponseUpdated.message) {
+          this.messageNeedsResponseUpdatedSubject.next({
+            message: needsResponseUpdated.message,
+            channelId: needsResponseUpdated.channel_id || needsResponseUpdated.message.channel,
+            channelNeedsResponseCount: needsResponseUpdated.channel_needs_response_count,
+          });
+        }
+        break;
+
+      case 'needs_response_notification':
+        const needsResponseNotification = data as any;
+        if (needsResponseNotification.message) {
+          this.needsResponseNotificationSubject.next({
+            message: needsResponseNotification.message,
+            channelId: needsResponseNotification.channel_id || needsResponseNotification.message.channel,
+            requesterId: needsResponseNotification.requester_id,
+            channelNeedsResponseCount: needsResponseNotification.channel_needs_response_count,
+          });
+        }
         break;
 
       case 'reaction_updated':

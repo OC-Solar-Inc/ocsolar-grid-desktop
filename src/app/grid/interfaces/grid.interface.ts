@@ -1,6 +1,5 @@
 /**
  * Grid - Internal Chat System Interfaces
- * Slack-like messaging for OCSolar
  * Updated to align with Site Frame API specification
  */
 
@@ -12,8 +11,6 @@ export type GridUserStatus = 'online' | 'away' | 'dnd' | 'offline';
 
 // Channel member roles
 export type GridMemberRole = 'owner' | 'admin' | 'member';
-
-// Per-member ability to post in a group
 export type GridPostingPermission = 'can_post' | 'read_only';
 
 /**
@@ -30,6 +27,7 @@ export interface GridChannel {
   is_archived: boolean;
   unread_count?: number;
   has_mention?: boolean; // True if user was @mentioned in unread messages
+  needs_response_count?: number; // Open response requests assigned to the current user
   last_message_at?: string;
   last_message_preview?: string;
   member_count?: number;
@@ -37,13 +35,10 @@ export interface GridChannel {
   dm_user?: GridProfile;
   // For Groups, member user IDs
   member_ids?: string[];
-  // Reply-only mode - only owner can post top-level messages
+  // Reply-only mode for group channels
   is_reply_only?: boolean;
-  // Effective posting permission for the current user. Supplied by the API
-  // for groups; absent (and treated as can_post) on older backends.
+  // Effective permission for the current user. Supplied by the API for groups.
   current_user_posting_permission?: GridPostingPermission;
-  // Open response requests assigned to the current user
-  needs_response_count?: number;
 }
 
 /**
@@ -80,9 +75,14 @@ export interface GridMessage {
   deleted_at?: string | null;
   is_edited: boolean;
   is_deleted: boolean;
-  // Resolved state
   is_resolved?: boolean;
   resolved_by_name?: string;
+  needs_response?: boolean;
+  response_requested_at?: string | null;
+  response_requested_by_user_id?: string | null;
+  response_target_user_ids?: string[];
+  response_received_at?: string | null;
+  response_received_by_name?: string | null;
   // Slack user info for unmapped users
   slack_user_name?: string;
   slack_user_id?: string;
@@ -190,7 +190,7 @@ export interface GridCreateGroupRequest {
   user_id: string;      // Creator's user ID
   user_ids: string[];   // All member user IDs (including creator)
   name?: string;        // Optional group name
-  is_reply_only?: boolean; // Reply-only mode
+  is_reply_only?: boolean; // Only owner can post top-level messages
 }
 
 /**
@@ -246,6 +246,8 @@ export type GridWsMessageType =
   | 'unread_update'
   | 'read_receipt'
   | 'message_resolved'
+  | 'message_needs_response_updated'
+  | 'needs_response_notification'
   | 'reaction_updated'
   | 'dm_notification'
   | 'channel_notification'
@@ -490,6 +492,9 @@ export interface GridActivityItem {
   channel_type: string;
   channel_name: string;
   message_id: string;
+  event_type?: 'mention' | 'dm' | 'channel' | 'reply' | 'needs_response';
+  parent_message_id?: string | null;
+  needs_response?: boolean;
 }
 
 /**
