@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { HttpClientModule } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, HttpClientModule } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 
 import { AngularFireModule } from '@angular/fire/compat';
@@ -18,6 +18,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { GridModule } from './grid/grid.module';
 import { DesktopAuthAdapter } from './services/desktop-auth.adapter';
 import { DesktopUserDataAdapter } from './services/desktop-user-data.adapter';
+import { FirebaseAuthInterceptor } from './interceptors/firebase-auth.interceptor';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -52,6 +53,9 @@ import { LoginComponent } from './components/login/login.component';
       userDataProvider: DesktopUserDataAdapter,
     }),
     AppRoutingModule,
+  ],
+  providers: [
+    { provide: HTTP_INTERCEPTORS, useClass: FirebaseAuthInterceptor, multi: true },
   ],
   bootstrap: [AppComponent],
 })
