@@ -16,7 +16,7 @@
  */
 
 import * as fs from "fs";
-import { chromium, Browser, Page } from "playwright";
+import { chromium, Browser, Page, Locator } from "playwright";
 import {
   PtoSubmissionPayload,
   PTO_SUBMISSION_SCHEMA_VERSION,
@@ -63,6 +63,7 @@ import {
   materializeFiles,
   MaterializedFiles,
 } from "./powerclerk-materialize-files";
+import { dismissPowerClerkPopups } from "./powerclerk-ui";
 
 interface CliFlags {
   payloadPath: string;
@@ -162,6 +163,32 @@ async function login(page: Page): Promise<void> {
     await page.getByRole("button", { name: "Log In" }).click();
     await page.waitForLoadState("networkidle");
   }
+  // PowerClerk's onboarding popup / cookie banner render on the landing
+  // page and their dimming overlay eats every click until dismissed.
+  await dismissPowerClerkPopups(page, log);
+}
+
+/**
+ * Click a locator, and if it fails (almost always because a PowerClerk
+ * overlay is intercepting pointer events), dismiss whatever popped up and
+ * try once more.  These navigation clicks live *outside* the FIELD_MAP
+ * loop's per-field try/catch, so a bare timeout here kills the run before a
+ * single field is applied — and the portal panel can then only report the
+ * generic "submission could not be completed" because no step ever emitted.
+ */
+async function clickWithPopupRetry(
+  page: Page,
+  locator: Locator,
+  what: string
+): Promise<void> {
+  try {
+    await locator.click({ timeout: 15000 });
+  } catch (err: any) {
+    const first = String(err?.message || err).split("\n")[0];
+    log(`Click on "${what}" failed (${first}) — dismissing popups and retrying...`);
+    await dismissPowerClerkPopups(page, log);
+    await locator.click({ timeout: 15000 });
+  }
 }
 
 async function main() {
@@ -229,17 +256,23 @@ async function main() {
 
     // Navigate to the New Application flow — re-use the proven path
     // from powerclerk-new-application.ts.
-    await page.locator('a:text("SCE - Solar Billing Plan")').first().click();
+    await clickWithPopupRetry(
+      page,
+      page.locator('a:text("SCE - Solar Billing Plan")').first(),
+      "SCE - Solar Billing Plan"
+    );
     await page.waitForLoadState("networkidle");
-    await page.locator("text=New Application").first().click();
+    await clickWithPopupRetry(
+      page,
+      page.locator("text=New Application").first(),
+      "New Application"
+    );
     await page.waitForLoadState("networkidle");
 
-    // PowerClerk occasionally renders a banner overlay that intercepts
-    // clicks on the acknowledgment checkbox.  Dismiss it if present.
-    const dismissBtn = page.locator("#cpr-banner-dimiss-btn");
-    if (await dismissBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await dismissBtn.click().catch(() => {});
-    }
+    // PowerClerk renders banner/onboarding overlays that intercept clicks
+    // on the wizard-1 acknowledgment checkbox.  Clear them before the
+    // field loop starts.
+    await dismissPowerClerkPopups(page, log);
 
     for (const entry of FIELD_MAP) {
       const cellId =
