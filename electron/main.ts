@@ -139,20 +139,48 @@ function createTray(): void {
   });
 }
 
+// ---- Auto-update ----
+//
+// Windows users almost never quit: the close button hides to the tray, so a
+// single check at launch (the previous behaviour) could go weeks without
+// running again, and a dialog parented to a hidden window is invisible on
+// Windows.  We re-check on an interval, keep the dialog visible whether or
+// not the window is showing, log every updater event, and expose a manual
+// "Check for Updates…" from the renderer.
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+let updateCheckTimer: NodeJS.Timeout | null = null;
+let manualCheckInFlight = false;
+
+function dialogParent(): BrowserWindow | undefined {
+  return mainWindow && mainWindow.isVisible() ? mainWindow : undefined;
+}
+
+function showUpdateDialog(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
+  const parent = dialogParent();
+  return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options);
+}
+
 function setupAutoUpdater(): void {
   if (isDev) return;
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = console;
+
+  autoUpdater.on('checking-for-update', () => console.log('[updater] checking for update'));
+  autoUpdater.on('update-available', (info) => console.log('[updater] update available:', info.version));
+  autoUpdater.on('update-not-available', (info) => console.log('[updater] up to date:', info.version));
+  autoUpdater.on('error', (err) => console.error('[updater] error:', err?.message || err));
 
   autoUpdater.on('update-downloaded', (info) => {
-    dialog.showMessageBox(mainWindow!, {
+    showUpdateDialog({
       type: 'info',
       title: 'Update Ready',
       message: `Version ${info.version} has been downloaded.`,
-      detail: 'The update will be installed when you restart the app.',
+      detail: `You are on ${app.getVersion()}. The update will be installed when you restart the app.`,
       buttons: ['Restart Now', 'Later'],
       defaultId: 0,
+      cancelId: 1,
     }).then((result) => {
       if (result.response === 0) {
         isQuitting = true;
@@ -161,7 +189,57 @@ function setupAutoUpdater(): void {
     });
   });
 
-  autoUpdater.checkForUpdatesAndNotify();
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.error('[updater] initial check failed:', err?.message || err);
+  });
+
+  updateCheckTimer = setInterval(() => {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error('[updater] periodic check failed:', err?.message || err);
+    });
+  }, UPDATE_CHECK_INTERVAL_MS);
+}
+
+/**
+ * User-initiated check from the account menu. Unlike the background check,
+ * this always reports back: up to date, downloading, or the error.
+ */
+async function checkForUpdatesManually(): Promise<void> {
+  const current = app.getVersion();
+  if (isDev) {
+    await showUpdateDialog({ type: 'info', title: 'Check for Updates', message: `Version ${current} (development build)`, detail: 'Auto-update is disabled in development.' });
+    return;
+  }
+  if (manualCheckInFlight) return;
+  manualCheckInFlight = true;
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    const latest = result?.updateInfo?.version;
+    if (latest && latest !== current) {
+      await showUpdateDialog({
+        type: 'info',
+        title: 'Update Available',
+        message: `Version ${latest} is available.`,
+        detail: `You are on ${current}. It is downloading now and you will be prompted to restart when it is ready.`,
+      });
+    } else {
+      await showUpdateDialog({
+        type: 'info',
+        title: 'Up to Date',
+        message: `You are on the latest version (${current}).`,
+      });
+    }
+  } catch (err) {
+    console.error('[updater] manual check failed:', (err as Error)?.message || err);
+    await showUpdateDialog({
+      type: 'error',
+      title: 'Update Check Failed',
+      message: `Could not check for updates. You are on ${current}.`,
+      detail: (err as Error)?.message || String(err),
+    });
+  } finally {
+    manualCheckInFlight = false;
+  }
 }
 
 // Single instance lock (skipped in dev so a dev build can run alongside the installed production app)
@@ -244,6 +322,10 @@ if (!gotTheLock) {
       app.setBadgeCount(count);
     });
 
+    // App version + manual update check (account menu in the renderer)
+    ipcMain.handle('get-app-version', () => app.getVersion());
+    ipcMain.handle('check-for-updates', () => checkForUpdatesManually());
+
     // Power state monitoring — notify renderer on sleep/wake
     powerMonitor.on('suspend', () => {
       console.log('System suspended');
@@ -269,6 +351,10 @@ if (!gotTheLock) {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
+  }
 });
 
 app.on('window-all-closed', () => {

@@ -7,9 +7,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDividerModule } from '@angular/material/divider';
 import { Subject, takeUntil } from 'rxjs';
 import { GridComponent } from '../../grid/components/grid/grid.component';
 import { GridThemeService, GridTheme } from '../../grid/services/grid-theme.service';
+import { DesktopIdentityService } from '../../services/desktop-identity.service';
 
 const SIDEBAR_BG: Record<GridTheme, string> = {
   theGrid: '#0A2240',
@@ -34,7 +36,7 @@ function darken(hex: string, amount: number): string {
 @Component({
   selector: 'app-grid-shell',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatMenuModule, MatTooltipModule, GridComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatMenuModule, MatTooltipModule, MatDividerModule, GridComponent],
   template: `
     <div class="grid-shell">
       <div class="title-bar" [style.background]="titleBarBg">
@@ -53,7 +55,17 @@ function darken(hex: string, amount: number): string {
           <button mat-icon-button [matMenuTriggerFor]="userMenu" class="profile-btn" matTooltip="Account">
             <mat-icon>account_circle</mat-icon>
           </button>
-          <mat-menu #userMenu="matMenu">
+          <mat-menu #userMenu="matMenu" class="account-menu">
+            <div class="account-info" (click)="$event.stopPropagation()">
+              <span class="account-name">{{ signedInName || 'Signed in' }}</span>
+              <span class="account-email" *ngIf="signedInEmail">{{ signedInEmail }}</span>
+              <span class="account-version" *ngIf="appVersion">OC Solar Grid {{ appVersion }}</span>
+            </div>
+            <mat-divider></mat-divider>
+            <button mat-menu-item (click)="checkForUpdates()" [disabled]="isCheckingForUpdates">
+              <mat-icon>system_update_alt</mat-icon>
+              <span>{{ isCheckingForUpdates ? 'Checking…' : 'Check for Updates…' }}</span>
+            </button>
             <button mat-menu-item (click)="logout()">
               <mat-icon>logout</mat-icon>
               <span>Sign Out</span>
@@ -154,6 +166,7 @@ function darken(hex: string, amount: number): string {
       flex: 1;
       min-height: 0;
     }
+
   `],
 })
 export class GridShellComponent implements OnInit, OnDestroy {
@@ -162,13 +175,18 @@ export class GridShellComponent implements OnInit, OnDestroy {
 
   searchQuery = '';
   titleBarBg = SIDEBAR_BG['theGrid'];
+  appVersion = '';
+  signedInName = '';
+  signedInEmail = '';
+  isCheckingForUpdates = false;
 
   private destroy$ = new Subject<void>();
 
   constructor(
     private afAuth: AngularFireAuth,
     private router: Router,
-    private gridThemeService: GridThemeService
+    private gridThemeService: GridThemeService,
+    private identity: DesktopIdentityService
   ) {
     this.titleBarBg = darken(SIDEBAR_BG[this.gridThemeService.getTheme()], 25);
   }
@@ -179,6 +197,34 @@ export class GridShellComponent implements OnInit, OnDestroy {
       .subscribe(theme => {
         this.titleBarBg = darken(SIDEBAR_BG[theme], 25);
       });
+
+    // Who am I signed in as? Surfaced in the account menu so a wrong or stale
+    // identity is visible at a glance when triaging "my messages are missing".
+    this.identity.currentUser$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(user => {
+        this.signedInName = user?.sFullName || [user?.sFirstName, user?.sLastName].filter(Boolean).join(' ');
+        this.signedInEmail = user?.sEmail || '';
+      });
+    this.afAuth.authState
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(user => {
+        if (user?.email && !this.signedInEmail) this.signedInEmail = user.email;
+      });
+
+    window.electronAPI?.getAppVersion?.().then(version => {
+      this.appVersion = version;
+    }).catch(() => { /* not running under Electron */ });
+  }
+
+  async checkForUpdates(): Promise<void> {
+    if (!window.electronAPI?.checkForUpdates || this.isCheckingForUpdates) return;
+    this.isCheckingForUpdates = true;
+    try {
+      await window.electronAPI.checkForUpdates();
+    } finally {
+      this.isCheckingForUpdates = false;
+    }
   }
 
   ngOnDestroy(): void {
@@ -196,7 +242,7 @@ export class GridShellComponent implements OnInit, OnDestroy {
   }
 
   async logout(): Promise<void> {
-    localStorage.removeItem('userDocId');
+    this.identity.clearStoredDocId();
     await this.afAuth.signOut();
     this.router.navigate(['/login']);
   }
