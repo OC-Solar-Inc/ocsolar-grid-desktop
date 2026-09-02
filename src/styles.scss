@@ -24,3 +24,25 @@ html, body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.35);
 }
+
+/* Account menu (grid-shell) — mat-menu renders in the CDK overlay, outside
+   the component's view, so these have to be global. */
+.account-menu .account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px 8px;
+  min-width: 220px;
+  cursor: default;
+}
+
+.account-menu .account-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.account-menu .account-email,
+.account-menu .account-version {
+  font-size: 12px;
+  opacity: 0.7;
+}

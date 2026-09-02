@@ -15,6 +15,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('system-power-state', listener);
   },
 
+  // App version (from package.json via app.getVersion())
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
+
+  // Manual "Check for Updates…" — main shows the result in a native dialog
+  checkForUpdates: (): Promise<void> => ipcRenderer.invoke('check-for-updates'),
+
   // Platform info
   platform: process.platform,
 });

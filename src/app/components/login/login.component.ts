@@ -1,32 +1,37 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AngularFireAuth } from '@angular/fire/compat/auth';
-import { AngularFirestore } from '@angular/fire/compat/firestore';
-import { firstValueFrom } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { DesktopIdentityService } from '../../services/desktop-identity.service';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss'],
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   email = '';
   password = '';
   errorMessage = '';
   isLoading = false;
+  appVersion = '';
 
   constructor(
     private afAuth: AngularFireAuth,
-    private afs: AngularFirestore,
+    private identity: DesktopIdentityService,
     private router: Router
   ) {
     // If already logged in, redirect to grid
     this.afAuth.authState.subscribe(user => {
-      if (user && localStorage.getItem('userDocId')) {
+      if (user && this.identity.getStoredDocId()) {
         this.router.navigate(['/']);
       }
     });
+  }
+
+  ngOnInit(): void {
+    window.electronAPI?.getAppVersion?.().then(version => {
+      this.appVersion = version;
+    }).catch(() => { /* not running under Electron */ });
   }
 
   async login(): Promise<void> {
@@ -51,30 +56,25 @@ export class LoginComponent {
       }
 
       // Find user doc where sUID matches Firebase UID
-      const firebaseUid = credential.user.uid;
-      const users = await firstValueFrom(
-        this.afs
-          .collection('users', ref => ref.where('sUID', '==', firebaseUid))
-          .snapshotChanges()
-          .pipe(
-            map(actions =>
-              actions.map(a => ({
-                id: a.payload.doc.id,
-                ...(a.payload.doc.data() as Record<string, any>),
-              }))
-            )
-          )
-      );
+      let userDoc;
+      try {
+        userDoc = await this.identity.lookupUserDoc(credential.user.uid);
+      } catch (lookupError) {
+        console.error('Login: users lookup failed:', lookupError);
+        this.errorMessage = 'Could not reach the user directory. Check your connection and try again.';
+        await this.afAuth.signOut();
+        this.isLoading = false;
+        return;
+      }
 
-      if (users.length === 0) {
+      if (!userDoc?.id) {
         this.errorMessage = 'User account not found.';
         await this.afAuth.signOut();
         this.isLoading = false;
         return;
       }
 
-      const userDoc = users[0];
-      localStorage.setItem('userDocId', userDoc.id);
+      await this.identity.syncStoredDocId(credential.user.uid);
 
       this.router.navigate(['/']);
     } catch (error: any) {
