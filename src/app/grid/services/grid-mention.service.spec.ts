@@ -22,9 +22,34 @@ describe('GridMentionService', () => {
       service.loadChannelMembers(channelId, userMap);
     });
 
-    it('should return all members when query is empty', () => {
+    it('should return all members when query is empty, with @Team first', () => {
       const results = service.search('', channelId);
-      expect(results.length).toBe(3);
+      expect(results.length).toBe(4);
+      expect(results[0].is_team).toBeTrue();
+      expect(results[0].display_name).toBe('Team');
+    });
+
+    it('should surface @Team for "team" and its aliases', () => {
+      for (const q of ['te', 'team', 'all', 'every', 'here']) {
+        const results = service.search(q, channelId);
+        expect(results.some((r) => r.is_team)).withContext(q).toBeTrue();
+      }
+      expect(service.search('alice', channelId).some((r) => r.is_team)).toBeFalse();
+    });
+
+    it('should not offer @Team in a DM', () => {
+      const channel: GridChannel = {
+        id: 'dm9',
+        name: '',
+        channel_type: 'dm',
+        created_by_id: 'u1',
+        created_at: '',
+        updated_at: '',
+        is_archived: false,
+        dm_user: { user_id: 'u2', display_name: 'Bob Jones', username: 'bob', is_online: true },
+      };
+      service.loadChannelMembers('dm9', new Map(), channel);
+      expect(service.search('', 'dm9').some((r) => r.is_team)).toBeFalse();
     });
 
     it('should filter by display_name', () => {
@@ -197,7 +222,7 @@ describe('GridMentionService', () => {
       userMap.set('u1', makeUser('Internal User', 'int@oc.com', 'Admin'));
       userMap.set('u2', makeUser('Customer User', 'cust@oc.com', 'Customer'));
       service.loadChannelMembers('ch1', userMap);
-      const results = service.search('', 'ch1');
+      const results = service.search('', 'ch1').filter((r) => !r.is_team);
       expect(results.length).toBe(1);
       expect(results[0].display_name).toBe('Internal User');
     });
@@ -209,19 +234,26 @@ describe('GridMentionService', () => {
       userMap.set('u1', customer);
       userMap.set('u2', makeUser('Staff', 'staff@oc.com', 'Admin'));
       service.loadChannelMembers('ch1', userMap);
-      const results = service.search('', 'ch1');
+      const results = service.search('', 'ch1').filter((r) => !r.is_team);
       expect(results.length).toBe(1);
       expect(results[0].display_name).toBe('Staff');
     });
 
-    it('should sort channel members by display name', () => {
+    it('should sort channel members by display name (after @Team)', () => {
       const userMap = new Map<string, User>();
       userMap.set('u1', makeUser('Zara', 'z@oc.com'));
       userMap.set('u2', makeUser('Anna', 'a@oc.com'));
       service.loadChannelMembers('ch1', userMap);
       const results = service.search('', 'ch1');
-      expect(results[0].display_name).toBe('Anna');
-      expect(results[1].display_name).toBe('Zara');
+      expect(results[0].display_name).toBe('Team');
+      expect(results[1].display_name).toBe('Anna');
+      expect(results[2].display_name).toBe('Zara');
+    });
+
+    it('should convert @[Team] to <@team> and render it back as @Team', () => {
+      const map = new Map([['Team', 'team']]);
+      expect(service.convertMentionsForSend('Heads up @[Team]', map)).toBe('Heads up <@team>');
+      expect(service.formatMentionsForDisplay('Heads up <@team>', new Map())).toBe('Heads up @Team');
     });
   });
 });

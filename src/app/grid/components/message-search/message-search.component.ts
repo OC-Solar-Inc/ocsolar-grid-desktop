@@ -17,6 +17,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subject, Subscription, of } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
 import { GridApiService } from '../../services/grid-api.service';
+import { TEAM_MENTION_LABEL, isTeamMention } from '../../services/grid-mention.service';
 import {
   GridChannel,
   GridJumpTarget,
@@ -319,6 +320,7 @@ export class MessageSearchComponent implements OnInit, AfterViewInit, OnDestroy 
   }
 
   private displayNameFor(userId: string): string {
+    if (isTeamMention(userId)) return TEAM_MENTION_LABEL;
     const u = this.userMap.get(userId);
     if (!u) return userId;
     return u.sFullName || `${u.sFirstName || ''} ${u.sLastName || ''}`.trim() || 'Unknown';

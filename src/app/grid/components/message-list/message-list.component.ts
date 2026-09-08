@@ -22,6 +22,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { GridMessage, GridTypingUser, GridMessageAttachment, GridMessageReaction, GridChannelType, GridHighlightRequest } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 import { GridFileUploadService } from '../../services/grid-file-upload.service';
+import { TEAM_MENTION_LABEL, isTeamMention } from '../../services/grid-mention.service';
 
 @Component({
   selector: 'lib-message-list',
@@ -85,10 +86,24 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   private previousMessageCount = 0;
   private previousTypingCount = 0;
   private previousLastMessageId: string | null = null;
-  private preserveScrollPosition = false;
-  private savedScrollHeight = 0;
+  private previousFirstMessageId: string | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private lastScrollHeight = 0;
+
+  // Scroll anchoring for prepended history. When older messages load above
+  // the viewport we remember the first visible message and where it sat, put
+  // it back there once the DOM updates, and keep re-aligning it for a few
+  // seconds while lazy images above it finish loading. Height-delta maths
+  // alone drifted (spinner removal, images collapsing on re-render) and
+  // dragged the reader back toward newer messages on every page.
+  private scrollAnchor: { messageId: string; offset: number; until: number } | null = null;
+  private static readonly ANCHOR_HOLD_MS = 5000;
+  // Fallback when no message row is visible to anchor on
+  private preserveScrollPosition = false;
+  private savedScrollHeight = 0;
+  private savedScrollTop = 0;
+  private lastProgrammaticScrollAt = 0;
+  private imageLoadListener: ((event: Event) => void) | null = null;
 
   // Jump-to-message: the id we still have to scroll to once it renders
   private pendingHighlightId: string | null = null;
@@ -125,6 +140,13 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       // Observe the scroll container's content
       this.resizeObserver.observe(this.scrollContainer.nativeElement);
       this.lastScrollHeight = this.scrollContainer.nativeElement.scrollHeight;
+
+      // Images above the anchored message change the layout as they load;
+      // `load` doesn't bubble, so listen in the capture phase.
+      this.imageLoadListener = () => {
+        if (this.scrollAnchor) this.restoreScrollAnchor();
+      };
+      this.scrollContainer.nativeElement.addEventListener('load', this.imageLoadListener, true);
     }
   }
 
@@ -132,6 +154,10 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
+    }
+    if (this.imageLoadListener && this.scrollContainer) {
+      this.scrollContainer.nativeElement.removeEventListener('load', this.imageLoadListener, true);
+      this.imageLoadListener = null;
     }
     if (this.confirmDeleteTimer) clearTimeout(this.confirmDeleteTimer);
     if (this.copiedTimer) clearTimeout(this.copiedTimer);
@@ -154,6 +180,7 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       const currentLastMessageId = this.messages.length > 0
         ? this.messages[this.messages.length - 1].id
         : null;
+      const currentFirstMessageId = this.messages.length > 0 ? this.messages[0].id : null;
 
       // Determine if we should scroll:
       // 1. New messages added (count increased)
@@ -163,15 +190,15 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       const lastMessageChanged = currentLastMessageId !== this.previousLastMessageId;
       const isInitialLoad = previousCount === 0;
 
-      // Detect older messages prepended: count grew but last message didn't change
-      const olderMessagesPrepended = hasNewMessages && !lastMessageChanged && !isInitialLoad;
+      // Detect older messages prepended: count grew and the first message
+      // changed (a buffered live message may land at the end in the same
+      // update, so the last message is not a reliable signal)
+      const olderMessagesPrepended =
+        hasNewMessages && !isInitialLoad && currentFirstMessageId !== this.previousFirstMessageId;
 
       if (olderMessagesPrepended) {
-        // Preserve scroll position when loading older messages
-        this.preserveScrollPosition = true;
-        if (this.scrollContainer) {
-          this.savedScrollHeight = this.scrollContainer.nativeElement.scrollHeight;
-        }
+        // Keep the reader where they are while history loads above
+        this.captureScrollAnchor();
       } else if (this.hasNewer || this.pendingHighlightId) {
         // History mode / pending jump: messages appended at the end (forward
         // paging) must not pull the viewport to the bottom, or the near-bottom
@@ -199,6 +226,7 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
 
       this.previousMessageCount = currentCount;
       this.previousLastMessageId = currentLastMessageId;
+      this.previousFirstMessageId = currentFirstMessageId;
     }
 
     // Scroll to bottom when typing indicator appears (if user hasn't scrolled up)
@@ -215,11 +243,17 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     if (this.pendingHighlightId) {
       this.tryApplyHighlight();
     }
-    if (this.preserveScrollPosition && this.scrollContainer) {
-      // Maintain scroll position after older messages are prepended
+    if (this.scrollAnchor) {
+      // Re-align on every check while the anchor is held: rows above may
+      // still be settling (images, GIFs) during the first seconds
+      if (Date.now() > this.scrollAnchor.until || !this.restoreScrollAnchor()) {
+        this.scrollAnchor = null;
+      }
+    } else if (this.preserveScrollPosition && this.scrollContainer) {
+      // Fallback: keep the same content in view by height delta
       const element = this.scrollContainer.nativeElement;
-      const newScrollHeight = element.scrollHeight;
-      element.scrollTop = newScrollHeight - this.savedScrollHeight;
+      const delta = element.scrollHeight - this.savedScrollHeight;
+      this.setScrollTop(element, this.savedScrollTop + delta);
       this.preserveScrollPosition = false;
     } else if (this.shouldScrollToBottom) {
       this.scrollToBottomWithRetry();
@@ -227,10 +261,61 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     }
   }
 
+  /**
+   * Remember the first message row visible in the viewport and its offset
+   * from the top of the scroll container, before older rows are inserted.
+   */
+  private captureScrollAnchor(): void {
+    const element = this.scrollContainer?.nativeElement;
+    if (!element) return;
+
+    const containerTop = element.getBoundingClientRect().top;
+    const rows = element.querySelectorAll<HTMLElement>('[data-message-id]');
+    for (const row of Array.from(rows)) {
+      const rect = row.getBoundingClientRect();
+      if (rect.bottom - containerTop > 0) {
+        this.scrollAnchor = {
+          messageId: row.dataset['messageId'] || '',
+          offset: rect.top - containerTop,
+          until: Date.now() + MessageListComponent.ANCHOR_HOLD_MS,
+        };
+        return;
+      }
+    }
+
+    // Nothing visible to anchor on (e.g. only dividers) — fall back to height maths
+    this.scrollAnchor = null;
+    this.preserveScrollPosition = true;
+    this.savedScrollHeight = element.scrollHeight;
+    this.savedScrollTop = element.scrollTop;
+  }
+
+  /** Put the anchored row back at its remembered offset. False if it's gone. */
+  private restoreScrollAnchor(): boolean {
+    const element = this.scrollContainer?.nativeElement;
+    const anchor = this.scrollAnchor;
+    if (!element || !anchor) return false;
+
+    const row = element.querySelector<HTMLElement>(`[data-message-id="${anchor.messageId}"]`);
+    if (!row) return false;
+
+    const currentOffset = row.getBoundingClientRect().top - element.getBoundingClientRect().top;
+    const delta = currentOffset - anchor.offset;
+    if (Math.abs(delta) >= 1) {
+      this.setScrollTop(element, element.scrollTop + delta);
+    }
+    return true;
+  }
+
+  private setScrollTop(element: HTMLDivElement, value: number): void {
+    this.lastProgrammaticScrollAt = Date.now();
+    element.scrollTop = value;
+  }
+
   private scrollToBottom(): void {
     if (this.scrollContainer) {
       const element = this.scrollContainer.nativeElement;
-      element.scrollTop = element.scrollHeight;
+      this.setScrollTop(element, element.scrollHeight);
     }
   }
 
@@ -281,6 +366,14 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
 
   onScroll(event: Event): void {
     const element = event.target as HTMLDivElement;
+
+    // Our own scrollTop writes (anchor restore, bottom scroll) echo as scroll
+    // events; they must not count as the user moving, nor trigger paging.
+    const programmatic = Date.now() - this.lastProgrammaticScrollAt < 150;
+    if (programmatic) return;
+
+    // The user took over — stop holding the history anchor
+    this.scrollAnchor = null;
 
     // Load more when scrolled to top
     if (element.scrollTop < 100 && this.hasMore && !this.isLoading) {
@@ -377,6 +470,9 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
    * Get display name for a user ID from the userMap
    */
   private getUserDisplayName(userId: string): string {
+    if (isTeamMention(userId)) {
+      return TEAM_MENTION_LABEL;
+    }
     if (this.userMap.has(userId)) {
       const user = this.userMap.get(userId)!;
       return user.sFullName || `${user.sFirstName || ''} ${user.sLastName || ''}`.trim() || userId;
@@ -421,7 +517,8 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     const mentionPattern = /&lt;@([A-Za-z0-9_-]+)&gt;/g;
     let formatted = escaped.replace(mentionPattern, (match, userId) => {
       const displayName = this.getUserDisplayName(userId);
-      return `<span class="mention">@${this.escapeHtml(displayName)}</span>`;
+      const cls = isTeamMention(userId) ? 'mention mention-team' : 'mention';
+      return `<span class="${cls}">@${this.escapeHtml(displayName)}</span>`;
     });
 
     // Replace GIPHY URLs with embedded images
@@ -653,8 +750,15 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     return group.type === 'messages' && !!this.currentUserId && group.userId === this.currentUserId;
   }
 
-  trackByGroupIndex(index: number): number {
-    return index;
+  /**
+   * Stable identity for rendered groups so prepending history doesn't
+   * re-render every existing group (which reloads their images and shifts
+   * the layout under the reader).
+   */
+  trackByGroup(index: number, group: MessageGroup): string {
+    if (group.type === 'messages') return `m:${group.messages[0]?.id ?? index}`;
+    if (group.type === 'divider') return `d:${group.date}`;
+    return 'new-divider';
   }
 
   trackByMessageId(index: number, message: GridMessage): string {

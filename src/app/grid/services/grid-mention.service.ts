@@ -3,13 +3,29 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { User } from '../interfaces/user';
 import { GridChannel } from '../interfaces/grid.interface';
 
-
 export interface MentionSuggestion {
   user_id: string;
   display_name: string;
   username: string;
   avatar_url?: string;
+  // True for the "@Team" group mention (everyone in the conversation)
+  is_team?: boolean;
 }
+
+/** Special mention id stored in message content as <@team>. */
+export const TEAM_MENTION_ID = 'team';
+export const TEAM_MENTION_LABEL = 'Team';
+
+export function isTeamMention(userId: string | null | undefined): boolean {
+  return (userId || '').toLowerCase() === TEAM_MENTION_ID;
+}
+
+const TEAM_SUGGESTION: MentionSuggestion = {
+  user_id: TEAM_MENTION_ID,
+  display_name: TEAM_MENTION_LABEL,
+  username: 'everyone in this conversation',
+  is_team: true,
+};
 
 @Injectable()
 export class GridMentionService {
@@ -56,6 +72,9 @@ export class GridMentionService {
 
       // Sort by display name
       suggestions.sort((a, b) => a.display_name.localeCompare(b.display_name));
+
+      // "@Team" notifies every member of the channel/group — listed first
+      suggestions.unshift({ ...TEAM_SUGGESTION });
     }
 
     this.memberCache.set(channelId, suggestions);
@@ -76,7 +95,9 @@ export class GridMentionService {
 
     const filtered = members.filter((member) =>
       member.display_name.toLowerCase().includes(lowerQuery) ||
-      member.username.toLowerCase().includes(lowerQuery)
+      member.username.toLowerCase().includes(lowerQuery) ||
+      // "@all" / "@everyone" / "@here" also surface the Team mention
+      (member.is_team && ['all', 'everyone', 'here', 'channel', 'group'].some((alias) => alias.startsWith(lowerQuery)))
     );
 
     // Return all matching members (no limit)
@@ -217,6 +238,9 @@ export class GridMentionService {
     const mentionPattern = /<@([A-Za-z0-9_-]+)>/g;
 
     return content.replace(mentionPattern, (match, userId) => {
+      if (isTeamMention(userId)) {
+        return `@${TEAM_MENTION_LABEL}`;
+      }
       const user = userMap.get(userId);
       if (user) {
         const displayName = user.sFullName || `${user.sFirstName} ${user.sLastName}`.trim() || 'Unknown';

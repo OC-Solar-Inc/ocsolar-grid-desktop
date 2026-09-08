@@ -12,6 +12,7 @@ import { GridChannel, GridChannelType, GridCreateGroupRequest, GridActivityItem 
 import { GridApiService } from '../../services/grid-api.service';
 import { GridThemeService, GridTheme, ThemeConfig, GRID_THEMES } from '../../services/grid-theme.service';
 import { GridNotificationService, NotificationType, NotificationPreferences } from '../../services/grid-notification.service';
+import { TEAM_MENTION_LABEL, isTeamMention } from '../../services/grid-mention.service';
 import { User } from '../../interfaces/user';
 import { GRID_CONFIG, GRID_AUTH_PROVIDER, GridConfig, GridAuthProvider } from '../../tokens/grid-tokens';
 
@@ -605,6 +606,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   formatPreview(preview?: string | null): string {
     if (!preview) return '';
     const resolved = preview.replace(/<@([A-Za-z0-9_-]+)>/g, (_match, userId: string) => {
+      if (isTeamMention(userId)) return `@${TEAM_MENTION_LABEL}`;
       const user = this.users.find(u => u.id === userId);
       return user ? `@${this.getUserDisplayName(user)}` : '@someone';
     });
@@ -937,6 +939,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
     if (!content) return '';
     // Replace <@userId> with @DisplayName
     return content.replace(/<@([A-Za-z0-9_-]+)>/g, (match, userId) => {
+      if (isTeamMention(userId)) return `@${TEAM_MENTION_LABEL}`;
       const user = this.users.find(u => u.id === userId);
       if (user) {
         const name = user.sFullName || `${user.sFirstName} ${user.sLastName}`.trim() || 'Unknown';

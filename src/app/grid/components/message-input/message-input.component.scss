@@ -997,3 +997,18 @@ $emoji-accent: #5aaad0;
     }
   }
 }
+
+// "@Team" row in the mention dropdown (group icon instead of an avatar)
+.mention-dropdown .mention-avatar.mention-team-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--grid-chat-accent, #1264a3) 18%, transparent);
+  color: var(--grid-chat-accent, #1264a3);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}

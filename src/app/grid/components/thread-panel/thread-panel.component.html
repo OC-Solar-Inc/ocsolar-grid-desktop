@@ -240,10 +240,13 @@
             (click)="selectMention(user)"
             (mouseenter)="selectedMentionIndex = i"
           >
-            <div class="mention-avatar" *ngIf="user.avatar_url">
+            <div class="mention-avatar mention-team-avatar" *ngIf="user.is_team">
+              <mat-icon>groups</mat-icon>
+            </div>
+            <div class="mention-avatar" *ngIf="!user.is_team && user.avatar_url">
               <img [src]="user.avatar_url" [alt]="user.display_name" />
             </div>
-            <div class="mention-avatar mention-initials" *ngIf="!user.avatar_url">
+            <div class="mention-avatar mention-initials" *ngIf="!user.is_team && !user.avatar_url">
               {{ getUserInitials(user) }}
             </div>
             <div class="mention-info">

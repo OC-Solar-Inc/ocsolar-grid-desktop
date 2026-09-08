@@ -11,7 +11,7 @@
   </div>
 
   <!-- Messages -->
-  <ng-container *ngFor="let group of groupedMessages; trackBy: trackByGroupIndex">
+  <ng-container *ngFor="let group of groupedMessages; trackBy: trackByGroup">
     <!-- Date Divider -->
     <div class="date-divider" *ngIf="isDivider(group)">
       <span>{{ group.date }}</span>

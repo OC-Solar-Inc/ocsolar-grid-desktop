@@ -18,7 +18,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { GridMessage, GridChannel, GridMessageAttachment, GridHighlightRequest } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
-import { GridMentionService, MentionSuggestion } from '../../services/grid-mention.service';
+import { GridMentionService, MentionSuggestion, TEAM_MENTION_LABEL, isTeamMention } from '../../services/grid-mention.service';
 import { GridFileUploadService } from '../../services/grid-file-upload.service';
 
 @Component({
@@ -364,6 +364,9 @@ export class ThreadPanelComponent implements OnChanges, AfterViewChecked, OnDest
    * Get display name for a user ID from the userMap
    */
   private getUserDisplayName(userId: string): string {
+    if (isTeamMention(userId)) {
+      return TEAM_MENTION_LABEL;
+    }
     if (this.userMap.has(userId)) {
       const user = this.userMap.get(userId)!;
       return user.sFullName || `${user.sFirstName || ''} ${user.sLastName || ''}`.trim() || userId;
@@ -401,10 +404,11 @@ export class ThreadPanelComponent implements OnChanges, AfterViewChecked, OnDest
 
     const escaped = this.escapeHtml(content);
     // Match escaped HTML entities: &lt;@userId&gt;
-    const mentionPattern = /&lt;@([A-Za-z0-9]+)&gt;/g;
+    const mentionPattern = /&lt;@([A-Za-z0-9_-]+)&gt;/g;
     let formatted = escaped.replace(mentionPattern, (match, userId) => {
       const displayName = this.getUserDisplayName(userId);
-      return `<span class="mention">@${this.escapeHtml(displayName)}</span>`;
+      const cls = isTeamMention(userId) ? 'mention mention-team' : 'mention';
+      return `<span class="${cls}">@${this.escapeHtml(displayName)}</span>`;
     });
 
     // Linkify URLs

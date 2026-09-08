@@ -77,6 +77,13 @@ describe('MessageListComponent', () => {
       const result = html('Hey <@unknown123>');
       expect(result).toContain('@unknown123');
     });
+
+    it('should render <@team> as a highlighted @Team mention', () => {
+      const result = html('Heads up <@team>: install moved');
+      expect(result).toContain('class="mention mention-team"');
+      expect(result).toContain('@Team');
+      expect(result).not.toContain('<@team>');
+    });
   });
 
   // ---------- GIPHY URL embedding ----------
@@ -213,6 +220,20 @@ describe('MessageListComponent', () => {
 
       const before = component.messages;
       component.messages = [...before, msg('c', 3), msg('d', 4)];
+      component.ngOnChanges(change('messages', before, component.messages));
+      expect(priv().shouldScrollToBottom).toBeFalse();
+      expect(component.newMessagesWhileScrolledUp).toBe(0);
+    });
+
+    it('prepending older messages never scrolls to the bottom, even with a live append', () => {
+      component.messages = [msg('c', 3), msg('d', 4)];
+      component.ngOnChanges(change('messages', [], component.messages));
+      priv().shouldScrollToBottom = false;
+      component.userHasScrolledUp = true;
+
+      // Older page arrives, and a buffered live message lands at the end too
+      const before = component.messages;
+      component.messages = [msg('a', 1), msg('b', 2), ...before, msg('e', 5)];
       component.ngOnChanges(change('messages', before, component.messages));
       expect(priv().shouldScrollToBottom).toBeFalse();
       expect(component.newMessagesWhileScrolledUp).toBe(0);
