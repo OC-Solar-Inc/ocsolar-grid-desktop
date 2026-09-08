@@ -1,5 +1,5 @@
 <div class="search-backdrop" (click)="onBackdropClick($event)">
-  <div class="search-panel">
+  <div class="search-panel" role="dialog" aria-label="Search messages">
     <!-- Input -->
     <div class="search-input-row">
       <mat-icon class="search-leading-icon">search</mat-icon>
@@ -8,10 +8,12 @@
         class="search-input"
         type="text"
         placeholder="Search messages…"
+        autocomplete="off"
+        spellcheck="false"
         [ngModel]="query"
         (ngModelChange)="onQueryChange($event)"
-        autofocus
       />
+      <mat-spinner *ngIf="isSearching && rows.length > 0" diameter="16" class="search-inline-spinner"></mat-spinner>
       <button *ngIf="query" class="search-clear" (click)="clear()" aria-label="Clear">
         <mat-icon>close</mat-icon>
       </button>
@@ -20,42 +22,88 @@
       </button>
     </div>
 
+    <!-- Scope -->
+    <div class="search-scope" *ngIf="currentChannel">
+      <span class="scope-label">Search in</span>
+      <button class="scope-chip" [class.active]="scope === 'all'" (click)="setScope('all')">
+        All channels
+      </button>
+      <button class="scope-chip" [class.active]="scope === 'channel'" (click)="setScope('channel')">
+        <mat-icon *ngIf="!isDmChannel(currentChannel)">tag</mat-icon>
+        <mat-icon *ngIf="isDmChannel(currentChannel)">person</mat-icon>
+        <span>{{ currentChannelLabel() }}</span>
+      </button>
+    </div>
+
     <!-- Body -->
-    <div class="search-body">
-      <div class="search-status" *ngIf="isSearching">
+    <div class="search-body" #resultsBody>
+      <!-- Full-body spinner only when there is nothing to keep on screen;
+           otherwise the previous results stay visible (dimmed) while the new
+           query runs, so typing never blanks the list. -->
+      <div class="search-status" *ngIf="isSearching && rows.length === 0">
         <mat-spinner diameter="20"></mat-spinner>
         <span>Searching…</span>
       </div>
 
       <div class="search-hint" *ngIf="!isSearching && !hasSearched">
         <mat-icon>search</mat-icon>
-        <span>Type at least 2 characters to search across your channels.</span>
+        <div class="search-hint-text">
+          <span>Type at least 2 characters to search messages across your channels.</span>
+          <span class="search-hint-sub">Use "quotes" for an exact phrase. Results open on the message itself.</span>
+        </div>
       </div>
 
-      <div class="search-empty" *ngIf="!isSearching && hasSearched && results.length === 0">
+      <div class="search-empty" *ngIf="!isSearching && hasSearched && rows.length === 0">
         <mat-icon>search_off</mat-icon>
-        <span>No messages found for “{{ query }}”.</span>
+        <span>
+          No messages found for “{{ query }}”<ng-container *ngIf="scope === 'channel'"> in {{ currentChannelLabel() }}</ng-container>.
+        </span>
       </div>
 
-      <ul class="search-results" *ngIf="!isSearching && results.length > 0">
+      <ul class="search-results" *ngIf="rows.length > 0" [class.stale]="isSearching" role="listbox">
         <li
-          *ngFor="let message of results; trackBy: trackByMessageId"
+          *ngFor="let row of rows; let i = index; trackBy: trackByRowId"
           class="search-result"
-          (click)="selectResult(message)"
+          role="option"
+          [class.active]="i === activeIndex"
+          [attr.aria-selected]="i === activeIndex"
+          (click)="selectRow(row)"
+          (mouseenter)="activeIndex = i"
         >
           <div class="result-meta">
-            <span class="result-sender">{{ senderName(message) }}</span>
-            <span class="result-channel">{{ channelName(message) }}</span>
-            <span class="result-time">{{ formatTime(message.created_at) }}</span>
+            <span class="result-sender">{{ row.sender }}</span>
+            <span class="result-channel" *ngIf="row.channel">{{ row.channel }}</span>
+            <span class="result-thread" *ngIf="row.isReply">
+              <mat-icon>forum</mat-icon>in thread
+            </span>
+            <span class="result-time">{{ row.time }}</span>
           </div>
           <div class="result-snippet">
-            <ng-container *ngFor="let part of highlightedSnippet(message)">
+            <ng-container *ngFor="let part of row.parts">
               <mark *ngIf="part.match">{{ part.text }}</mark>
               <span *ngIf="!part.match">{{ part.text }}</span>
             </ng-container>
           </div>
         </li>
       </ul>
+
+      <div class="search-footer" *ngIf="!isSearching && (rows.length > 0 || page > 0)">
+        <div class="pager">
+          <button class="pager-btn" (click)="prevPage()" [disabled]="!canGoPrev" aria-label="Previous page">
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+          <span class="result-count">
+            <ng-container *ngIf="rows.length > 0">Results {{ pageStart }}–{{ pageEnd }}</ng-container>
+            <ng-container *ngIf="rows.length === 0">No more results</ng-container>
+            <span class="page-number">· Page {{ page + 1 }}</span>
+            <mat-spinner *ngIf="isPaging" diameter="14" class="pager-spinner"></mat-spinner>
+          </span>
+          <button class="pager-btn" (click)="nextPage()" [disabled]="!canGoNext" aria-label="Next page">
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        </div>
+        <span class="result-hint">↑↓ move · Enter open · ⌥←/→ page</span>
+      </div>
     </div>
   </div>
 </div>

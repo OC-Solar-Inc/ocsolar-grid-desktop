@@ -18,6 +18,7 @@ import {
   GridChannelFilesResponse,
   GridActivityItem,
   GridPostingPermission,
+  GridMessageSearchResponse,
 } from '../interfaces/grid.interface';
 
 /**
@@ -325,6 +326,56 @@ export class GridApiService {
       .pipe(catchError(this.handleError<GridCursorPaginatedResponse<GridMessage>>('getMessages')));
   }
 
+  /**
+   * Window of messages centred on one message (jump-to-message). A reply id
+   * is resolved to its parent server-side; the response's `anchor_id` /
+   * `anchor_reply_id` say what was resolved. `has_newer` + `prev_cursor`
+   * drive forward paging via getMessagesAfter().
+   */
+  getMessagesAround(
+    channelId: string,
+    anchorMessageId: string,
+    limit: number = 50
+  ): Observable<GridCursorPaginatedResponse<GridMessage>> {
+    return this.getMessagesPage(channelId, { around: anchorMessageId }, limit, 'getMessagesAround');
+  }
+
+  /**
+   * Messages newer than the given one, for scrolling forward while viewing
+   * history. Same envelope as getMessages(); results newest-first.
+   */
+  getMessagesAfter(
+    channelId: string,
+    afterMessageId: string,
+    limit: number = 50
+  ): Observable<GridCursorPaginatedResponse<GridMessage>> {
+    return this.getMessagesPage(channelId, { after: afterMessageId }, limit, 'getMessagesAfter');
+  }
+
+  private getMessagesPage(
+    channelId: string,
+    selector: { around?: string; after?: string },
+    limit: number,
+    operation: string
+  ): Observable<GridCursorPaginatedResponse<GridMessage>> {
+    const userId = this.getCurrentUserId();
+    let params = new HttpParams()
+      .set('limit', limit.toString())
+      .set('paginated', 'true');
+    if (userId) {
+      params = params.set('user_id', userId);
+    }
+    if (selector.around) {
+      params = params.set('around', selector.around);
+    }
+    if (selector.after) {
+      params = params.set('after', selector.after);
+    }
+    return this.http
+      .get<GridCursorPaginatedResponse<GridMessage>>(`${this.baseUrl}/chat/channels/${channelId}/messages/`, { params })
+      .pipe(catchError(this.handleError<GridCursorPaginatedResponse<GridMessage>>(operation)));
+  }
+
   getThreadReplies(
     messageId: string,
     cursor?: string,
@@ -400,19 +451,38 @@ export class GridApiService {
   }
 
   /**
-   * Full-text search of message content across channels the user can see.
+   * Full-text search of message content across channels the user can see
+   * (websearch syntax: "quoted phrase", OR, -exclude; partial words and ids
+   * match by substring). Newest first. `channelId` narrows to one channel,
+   * `offset` pages deeper; `has_more` says whether another page exists.
    */
-  searchMessages(query: string, limit = 30): Observable<GridMessage[]> {
+  searchMessages(
+    query: string,
+    opts: { limit?: number; offset?: number; channelId?: string | null } = {}
+  ): Observable<GridMessageSearchResponse> {
     const userId = this.getCurrentUserId();
-    let params = new HttpParams().set('q', query).set('limit', String(limit));
+    const limit = opts.limit ?? 30;
+    const offset = opts.offset ?? 0;
+    let params = new HttpParams()
+      .set('q', query)
+      .set('limit', String(limit))
+      .set('offset', String(offset));
     if (userId) {
       params = params.set('user_id', userId);
     }
+    if (opts.channelId) {
+      params = params.set('channel_id', opts.channelId);
+    }
     return this.http
-      .get<{ results: GridMessage[]; count: number }>(`${this.baseUrl}/chat/messages/search/`, { params })
+      .get<GridMessageSearchResponse>(`${this.baseUrl}/chat/messages/search/`, { params })
       .pipe(
-        map((res) => res?.results || []),
-        catchError(this.handleError<GridMessage[]>('searchMessages'))
+        map((res) => ({
+          results: res?.results || [],
+          count: res?.count ?? (res?.results?.length || 0),
+          offset: res?.offset ?? offset,
+          has_more: !!res?.has_more,
+        })),
+        catchError(this.handleError<GridMessageSearchResponse>('searchMessages'))
       );
   }
 

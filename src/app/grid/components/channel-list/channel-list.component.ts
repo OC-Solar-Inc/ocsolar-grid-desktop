@@ -44,6 +44,11 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   @Output() markAllReadRequested = new EventEmitter<void>();
   @Output() activityItemSelected = new EventEmitter<{ channelId: string; messageId: string }>();
   @Output() sidenavToggle = new EventEmitter<void>();
+  // Open the message search overlay (sidebar "Search messages" bar)
+  @Output() searchRequested = new EventEmitter<void>();
+
+  /** Platform-aware shortcut label for the search bar. */
+  readonly searchShortcutLabel = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘K' : 'Ctrl+K';
 
   searchQuery = '';
   isCreatingChannel = false;

@@ -54,6 +54,7 @@
         <div
           *ngFor="let message of group.messages; trackBy: trackByMessageId"
           class="message-item"
+          [attr.data-message-id]="message.id"
           [class.pending]="message.pending"
           [class.error]="message.error"
         >
@@ -303,12 +304,33 @@
     <span class="typing-text">{{ getTypingText() }}</span>
   </div>
 
+  <!-- History mode: the loaded window stops before the newest messages -->
+  <div class="history-tail" *ngIf="hasNewer">
+    <ng-container *ngIf="isLoadingNewer">
+      <mat-spinner diameter="16"></mat-spinner>
+      <span>Loading newer messages…</span>
+    </ng-container>
+    <ng-container *ngIf="!isLoadingNewer">
+      <mat-icon>history</mat-icon>
+      <span>You're viewing older messages.</span>
+      <button class="history-tail-link" (click)="loadNewer.emit()">Load newer</button>
+    </ng-container>
+  </div>
+
   <!-- Jump to Latest Pill -->
-  <button class="jump-to-latest" *ngIf="userHasScrolledUp" (click)="jumpToLatest()">
+  <button class="jump-to-latest" *ngIf="userHasScrolledUp || hasNewer" (click)="jumpToLatest()">
     <mat-icon>arrow_downward</mat-icon>
-    <span *ngIf="newMessagesWhileScrolledUp > 0">
-      {{ newMessagesWhileScrolledUp }} new {{ newMessagesWhileScrolledUp === 1 ? 'message' : 'messages' }}
-    </span>
-    <span *ngIf="newMessagesWhileScrolledUp === 0">Jump to latest</span>
+    <ng-container *ngIf="hasNewer">
+      <span *ngIf="bufferedNewerCount > 0">
+        {{ bufferedNewerCount }} new {{ bufferedNewerCount === 1 ? 'message' : 'messages' }} · Jump to latest
+      </span>
+      <span *ngIf="bufferedNewerCount === 0">Jump to latest</span>
+    </ng-container>
+    <ng-container *ngIf="!hasNewer">
+      <span *ngIf="newMessagesWhileScrolledUp > 0">
+        {{ newMessagesWhileScrolledUp }} new {{ newMessagesWhileScrolledUp === 1 ? 'message' : 'messages' }}
+      </span>
+      <span *ngIf="newMessagesWhileScrolledUp === 0">Jump to latest</span>
+    </ng-container>
   </button>
 </div>

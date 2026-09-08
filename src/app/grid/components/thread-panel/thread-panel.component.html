@@ -113,10 +113,11 @@
     </div>
 
     <!-- Replies -->
-    <div class="replies-list">
+    <div class="replies-list" #repliesList>
       <div
         *ngFor="let reply of replies; trackBy: trackByReplyId"
         class="reply-message"
+        [attr.data-message-id]="reply.id"
       >
         <div class="message-avatar">
           <div class="avatar" *ngIf="!getAvatarUrl(reply)" [style.background]="getAvatarColor(reply)">

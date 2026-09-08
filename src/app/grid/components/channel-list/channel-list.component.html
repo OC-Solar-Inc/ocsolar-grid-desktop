@@ -189,12 +189,25 @@
 
   <!-- Normal Channel List View -->
   <ng-container *ngIf="!showActivityView">
+    <!-- Message search — opens the ⌘K overlay -->
+    <button
+      type="button"
+      class="message-search-bar"
+      (click)="searchRequested.emit()"
+      matTooltip="Find a message in any channel"
+      matTooltipPosition="right"
+    >
+      <mat-icon>manage_search</mat-icon>
+      <span class="message-search-label">Search messages</span>
+      <kbd>{{ searchShortcutLabel }}</kbd>
+    </button>
+
     <!-- Search -->
     <div class="search-container">
       <mat-icon>search</mat-icon>
       <input
         type="text"
-        placeholder="Search channels"
+        placeholder="Search for projects and groups"
         [ngModel]="searchQuery"
         (ngModelChange)="onSearchChange($event)"
         class="search-input"

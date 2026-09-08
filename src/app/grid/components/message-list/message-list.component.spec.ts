@@ -1,7 +1,9 @@
+import { SimpleChange, SimpleChanges } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DomSanitizer } from '@angular/platform-browser';
 import { MessageListComponent } from './message-list.component';
 import { GridFileUploadService } from '../../services/grid-file-upload.service';
+import { GridMessage } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 
 describe('MessageListComponent', () => {
@@ -161,6 +163,106 @@ describe('MessageListComponent', () => {
     it('should return empty SafeHtml for empty string', () => {
       const result = html('');
       expect(result).toBe('');
+    });
+  });
+
+  // ---------- Jump-to-message / history mode scroll rules ----------
+
+  describe('jump-to-message and history mode', () => {
+    const msg = (id: string, i: number): GridMessage => ({
+      id,
+      channel: 'c1',
+      user_id: 'u1',
+      content: `m ${id}`,
+      parent: null,
+      reply_count: 0,
+      created_at: new Date(2026, 0, 1, 0, i).toISOString(),
+      is_edited: false,
+      is_deleted: false,
+    });
+    const change = (key: string, previousValue: any, currentValue: any, firstChange = false): SimpleChanges => ({
+      [key]: new SimpleChange(previousValue, currentValue, firstChange),
+    });
+    const priv = () => component as any;
+
+    it('a highlight request on an initial load does not scroll to the bottom', () => {
+      component.highlightRequest = { messageId: 'b', token: 1 };
+      component.messages = [msg('a', 1), msg('b', 2), msg('c', 3)];
+      component.ngOnChanges({
+        ...change('highlightRequest', null, component.highlightRequest),
+        ...change('messages', [], component.messages),
+      });
+      expect(priv().pendingHighlightId).toBe('b');
+      expect(priv().shouldScrollToBottom).toBeFalse();
+      expect(component.userHasScrolledUp).toBeTrue();
+    });
+
+    it('a normal initial load still scrolls to the bottom', () => {
+      component.messages = [msg('a', 1), msg('b', 2)];
+      component.ngOnChanges(change('messages', [], component.messages));
+      expect(priv().shouldScrollToBottom).toBeTrue();
+      expect(component.userHasScrolledUp).toBeFalse();
+    });
+
+    it('messages appended while viewing history never pull the viewport down', () => {
+      component.messages = [msg('a', 1), msg('b', 2)];
+      component.ngOnChanges(change('messages', [], component.messages));
+      priv().shouldScrollToBottom = false;
+      component.hasNewer = true;
+      component.userHasScrolledUp = false;
+
+      const before = component.messages;
+      component.messages = [...before, msg('c', 3), msg('d', 4)];
+      component.ngOnChanges(change('messages', before, component.messages));
+      expect(priv().shouldScrollToBottom).toBeFalse();
+      expect(component.newMessagesWhileScrolledUp).toBe(0);
+    });
+
+    it('a channel switch (empty list) drops a pending jump target', () => {
+      component.highlightRequest = { messageId: 'zzz', token: 2 };
+      component.ngOnChanges(change('highlightRequest', null, component.highlightRequest));
+      expect(priv().pendingHighlightId).toBe('zzz');
+      const before = [msg('a', 1)];
+      component.messages = [];
+      component.ngOnChanges(change('messages', before, []));
+      expect(priv().pendingHighlightId).toBeNull();
+    });
+
+    it('jumpToLatest asks the shell for the live tail while in history mode', () => {
+      const emitted = jasmine.createSpy('jumpToLatestRequested');
+      component.jumpToLatestRequested.subscribe(emitted);
+      component.hasNewer = true;
+      component.userHasScrolledUp = true;
+      component.jumpToLatest();
+      expect(emitted).toHaveBeenCalledTimes(1);
+      expect(component.userHasScrolledUp).toBeFalse();
+    });
+
+    it('jumpToLatest just scrolls when the tail is already loaded', () => {
+      const emitted = jasmine.createSpy('jumpToLatestRequested');
+      component.jumpToLatestRequested.subscribe(emitted);
+      component.hasNewer = false;
+      component.jumpToLatest();
+      expect(emitted).not.toHaveBeenCalled();
+    });
+
+    it('scrolling near the bottom pages forward only in history mode', () => {
+      const emitted = jasmine.createSpy('loadNewer');
+      component.loadNewer.subscribe(emitted);
+      const target = { scrollTop: 900, scrollHeight: 1500, clientHeight: 550 } as unknown as HTMLDivElement;
+      const event = { target } as unknown as Event;
+
+      component.hasNewer = false;
+      component.onScroll(event);
+      expect(emitted).not.toHaveBeenCalled();
+
+      component.hasNewer = true;
+      component.onScroll(event);
+      expect(emitted).toHaveBeenCalledTimes(1);
+
+      component.isLoadingNewer = true;
+      component.onScroll(event);
+      expect(emitted).toHaveBeenCalledTimes(1);
     });
   });
 });

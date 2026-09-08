@@ -19,7 +19,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { GridMessage, GridTypingUser, GridMessageAttachment, GridMessageReaction, GridChannelType } from '../../interfaces/grid.interface';
+import { GridMessage, GridTypingUser, GridMessageAttachment, GridMessageReaction, GridChannelType, GridHighlightRequest } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 import { GridFileUploadService } from '../../services/grid-file-upload.service';
 
@@ -39,8 +39,16 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   @Input() currentUserId: string | null = null;
   @Input() channelType: GridChannelType | null = null;
   @Input() unreadCountOnEntry = 0; // Number of unread messages when entering channel
+  // Jump-to-message: scroll this message into view and flash it once rendered
+  @Input() highlightRequest: GridHighlightRequest | null = null;
+  // History mode: the loaded window doesn't reach the channel's newest message
+  @Input() hasNewer = false;
+  @Input() isLoadingNewer = false;
+  @Input() bufferedNewerCount = 0; // live messages held back while viewing history
 
   @Output() loadMore = new EventEmitter<void>();
+  @Output() loadNewer = new EventEmitter<void>();
+  @Output() jumpToLatestRequested = new EventEmitter<void>();
   @Output() openThread = new EventEmitter<GridMessage>();
   @Output() resolveToggled = new EventEmitter<GridMessage>();
   @Output() imagePreview = new EventEmitter<GridMessageAttachment>();
@@ -82,6 +90,13 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   private resizeObserver: ResizeObserver | null = null;
   private lastScrollHeight = 0;
 
+  // Jump-to-message: the id we still have to scroll to once it renders
+  private pendingHighlightId: string | null = null;
+  private highlightDeadline = 0;
+  private static readonly HIGHLIGHT_WAIT_MS = 10000; // give a slow window load this long to render the row
+  private static readonly HIGHLIGHT_MS = 2500;
+  private highlightTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     private sanitizer: DomSanitizer,
     public fileUploadService: GridFileUploadService
@@ -94,8 +109,14 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
         const element = this.scrollContainer.nativeElement;
         const currentScrollHeight = element.scrollHeight;
 
-        // If height increased and we should be at bottom, scroll down
-        if (currentScrollHeight > this.lastScrollHeight && !this.userHasScrolledUp) {
+        // If height increased and we should be at bottom, scroll down —
+        // never while viewing history or waiting to land on a message
+        if (
+          currentScrollHeight > this.lastScrollHeight &&
+          !this.userHasScrolledUp &&
+          !this.hasNewer &&
+          !this.pendingHighlightId
+        ) {
           this.scrollToBottom();
         }
         this.lastScrollHeight = currentScrollHeight;
@@ -114,9 +135,19 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     }
     if (this.confirmDeleteTimer) clearTimeout(this.confirmDeleteTimer);
     if (this.copiedTimer) clearTimeout(this.copiedTimer);
+    if (this.highlightTimer) clearTimeout(this.highlightTimer);
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // A jump request lands somewhere in history: from now until the message
+    // is on screen, none of the "stick to the bottom" rules may fire.
+    if (changes['highlightRequest'] && this.highlightRequest) {
+      this.pendingHighlightId = this.highlightRequest.messageId;
+      this.highlightDeadline = Date.now() + MessageListComponent.HIGHLIGHT_WAIT_MS;
+      this.shouldScrollToBottom = false;
+      this.userHasScrolledUp = true;
+    }
+
     if (changes['messages']) {
       const currentCount = this.messages.length;
       const previousCount = this.previousMessageCount;
@@ -141,6 +172,10 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
         if (this.scrollContainer) {
           this.savedScrollHeight = this.scrollContainer.nativeElement.scrollHeight;
         }
+      } else if (this.hasNewer || this.pendingHighlightId) {
+        // History mode / pending jump: messages appended at the end (forward
+        // paging) must not pull the viewport to the bottom, or the near-bottom
+        // scroll handler would page forward again in a loop.
       } else if ((hasNewMessages || lastMessageChanged) && !this.userHasScrolledUp) {
         // Scroll to bottom for new messages at the end
         this.shouldScrollToBottom = true;
@@ -151,10 +186,15 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
 
       // Reset scroll flag on initial load or channel change (count goes to 0 or from 0)
       if (isInitialLoad || currentCount === 0) {
-        this.userHasScrolledUp = false;
-        this.shouldScrollToBottom = true;
+        const landingOnMessage = !!this.pendingHighlightId && currentCount > 0;
+        this.userHasScrolledUp = landingOnMessage;
+        this.shouldScrollToBottom = !landingOnMessage;
         this.newMessagesWhileScrolledUp = 0;
         this.cancelEdit();
+        if (currentCount === 0) {
+          // Channel switched — any jump target belonged to the old feed
+          this.pendingHighlightId = null;
+        }
       }
 
       this.previousMessageCount = currentCount;
@@ -164,7 +204,7 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     // Scroll to bottom when typing indicator appears (if user hasn't scrolled up)
     if (changes['typingUsers']) {
       const currentTypingCount = this.typingUsers.length;
-      if (currentTypingCount > this.previousTypingCount && !this.userHasScrolledUp) {
+      if (currentTypingCount > this.previousTypingCount && !this.userHasScrolledUp && !this.hasNewer) {
         this.shouldScrollToBottom = true;
       }
       this.previousTypingCount = currentTypingCount;
@@ -172,6 +212,9 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   }
 
   ngAfterViewChecked(): void {
+    if (this.pendingHighlightId) {
+      this.tryApplyHighlight();
+    }
     if (this.preserveScrollPosition && this.scrollContainer) {
       // Maintain scroll position after older messages are prepended
       const element = this.scrollContainer.nativeElement;
@@ -203,6 +246,39 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
     setTimeout(() => this.scrollToBottom(), 300);
   }
 
+  /**
+   * Scroll the pending jump target into view and flash it. Called from
+   * ngAfterViewChecked until the row exists (the window may still be
+   * loading); gives up after HIGHLIGHT_WAIT_MS so a message that never
+   * renders can't pin the list.
+   */
+  private tryApplyHighlight(): void {
+    const id = this.pendingHighlightId;
+    if (!id || !this.scrollContainer) return;
+
+    const row = this.scrollContainer.nativeElement.querySelector<HTMLElement>(
+      `[data-message-id="${id}"]`
+    );
+    if (!row) {
+      if (Date.now() > this.highlightDeadline) {
+        this.pendingHighlightId = null;
+      }
+      return;
+    }
+
+    this.pendingHighlightId = null;
+    row.scrollIntoView({ block: 'center' });
+    // Direct DOM class toggling keeps this out of change detection
+    row.classList.remove('highlighted');
+    void row.offsetWidth; // restart the animation when re-jumping to the same row
+    row.classList.add('highlighted');
+    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+    this.highlightTimer = setTimeout(() => {
+      row.classList.remove('highlighted');
+      this.highlightTimer = null;
+    }, MessageListComponent.HIGHLIGHT_MS);
+  }
+
   onScroll(event: Event): void {
     const element = event.target as HTMLDivElement;
 
@@ -213,6 +289,12 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
 
     // Track if user has scrolled up from bottom
     const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+
+    // Viewing history: page forward when the user nears the bottom
+    if (this.hasNewer && !this.isLoadingNewer && distanceFromBottom < 120) {
+      this.loadNewer.emit();
+    }
+
     if (distanceFromBottom > 150) {
       // User scrolled up - don't auto-scroll on new messages
       this.userHasScrolledUp = true;
@@ -226,6 +308,13 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   jumpToLatest(): void {
     this.userHasScrolledUp = false;
     this.newMessagesWhileScrolledUp = 0;
+    this.pendingHighlightId = null;
+    if (this.hasNewer) {
+      // The newest messages aren't loaded — the shell reloads the live tail,
+      // and the resulting messages change scrolls us to the bottom.
+      this.jumpToLatestRequested.emit();
+      return;
+    }
     this.scrollToBottomWithRetry();
   }
 

@@ -96,6 +96,39 @@ export interface GridMessage {
   attachments?: GridMessageAttachment[];
   // Emoji reactions, aggregated per emoji
   reactions?: GridMessageReaction[];
+  // Channel label, supplied by the message search endpoint only (the client
+  // may not have the channel in its sidebar, e.g. an unjoined public channel)
+  channel_name?: string;
+  channel_type?: GridChannelType;
+}
+
+/**
+ * Response of GET /chat/messages/search/
+ */
+export interface GridMessageSearchResponse {
+  results: GridMessage[];
+  count: number;
+  offset: number;
+  has_more: boolean;
+}
+
+/**
+ * "Take me to this message" — emitted by search results, activity items and
+ * notification clicks. `parentId` is set when the target is a thread reply.
+ */
+export interface GridJumpTarget {
+  channelId: string;
+  messageId: string;
+  parentId?: string | null;
+}
+
+/**
+ * Asks a list component to scroll a message into view and flash it. The
+ * token makes repeated jumps to the same message register as a change.
+ */
+export interface GridHighlightRequest {
+  messageId: string;
+  token: number;
 }
 
 /**
@@ -171,6 +204,11 @@ export interface GridCursorPaginatedResponse<T> {
   results: T[];
   next_cursor: string | null;
   count: number;
+  // Channel messages only (around= / after= window paging):
+  prev_cursor?: string | null;   // newest id in this page, for after=
+  has_newer?: boolean;           // more messages exist after this page
+  anchor_id?: string;            // around=: the top-level message the window is centred on
+  anchor_reply_id?: string | null; // around=: set when the requested id was a thread reply
 }
 
 /**

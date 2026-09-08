@@ -757,6 +757,50 @@ $error-color: #e01e5a;
   }
 }
 
+// Jump-to-message landing flash (class is toggled directly on the row)
+@keyframes message-flash {
+  0%, 60% { background: color-mix(in srgb, var(--grid-chat-accent) 28%, transparent); }
+  100% { background: transparent; }
+}
+
+.message-item.highlighted {
+  animation: message-flash 2.5s ease-out;
+  box-shadow: inset 3px 0 0 var(--grid-chat-accent);
+}
+
+// History mode strip — the loaded window stops before the newest messages
+.history-tail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border-top: 1px dashed var(--grid-chat-border);
+  color: var(--grid-chat-text-muted);
+  font-size: 13px;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .history-tail-link {
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: var(--grid-chat-accent);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
 // Jump to latest pill — sticks to the bottom of the scroll viewport
 .jump-to-latest {
   position: sticky;

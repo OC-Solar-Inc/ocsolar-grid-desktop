@@ -52,7 +52,8 @@
         (dmSelected)="onDmSelected($event)"
         (groupCreated)="onGroupCreated($event)"
         (markAllReadRequested)="onMarkAllAsRead()"
-        (activityItemSelected)="onActivityItemSelected($event)">
+        (activityItemSelected)="onActivityItemSelected($event)"
+        (searchRequested)="openSearch()">
       </lib-channel-list>
     </aside>
 
@@ -154,7 +155,13 @@
           [userMap]="userMap"
           [currentUserId]="currentUserId"
           [unreadCountOnEntry]="unreadCountOnEntry"
+          [highlightRequest]="highlightRequest"
+          [hasNewer]="hasNewerMessages"
+          [isLoadingNewer]="isLoadingNewer"
+          [bufferedNewerCount]="bufferedNewerCount"
           (loadMore)="loadMoreMessages()"
+          (loadNewer)="loadNewerMessages()"
+          (jumpToLatestRequested)="exitHistoryMode()"
           (openThread)="openThreadPanel($event)"
           (resolveToggled)="onResolveToggled($event)"
           (imagePreview)="openImageLightbox($event)"
@@ -211,6 +218,7 @@
         [channel]="currentChannel"
         [readOnly]="isGroupReadOnly()"
         [followed]="isCurrentThreadFollowed()"
+        [highlightRequest]="threadHighlightRequest"
         (close)="closeThreadPanel()"
         (replySent)="sendThreadReply($event)"
         (followToggled)="toggleCurrentThreadFollow()"
@@ -240,6 +248,7 @@
     *ngIf="isSearchOpen"
     [userMap]="userMap"
     [channels]="channels"
+    [currentChannel]="currentChannel"
     (closed)="closeSearch()"
     (resultSelected)="onSearchResultSelected($event)">
   </lib-message-search>

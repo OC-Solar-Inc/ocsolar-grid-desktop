@@ -204,9 +204,21 @@
   gap: 16px;
 }
 
+// Jump-to-message landing flash (class is toggled directly on the row)
+@keyframes reply-flash {
+  0%, 60% { background: color-mix(in srgb, var(--grid-chat-accent) 28%, transparent); }
+  100% { background: transparent; }
+}
+
 .reply-message {
   display: flex;
   gap: 12px;
+  border-radius: 6px;
+
+  &.highlighted {
+    animation: reply-flash 2.5s ease-out;
+    box-shadow: inset 3px 0 0 var(--grid-chat-accent);
+  }
 
   .message-avatar {
     width: 32px;

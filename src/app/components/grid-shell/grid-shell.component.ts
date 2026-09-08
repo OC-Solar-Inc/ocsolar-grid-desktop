@@ -46,7 +46,7 @@ function darken(hex: string, amount: number): string {
           <input
             #searchInput
             type="text"
-            placeholder="Search channels"
+            placeholder="Search for projects and groups"
             [ngModel]="searchQuery"
             (ngModelChange)="onSearchChange($event)"
           />

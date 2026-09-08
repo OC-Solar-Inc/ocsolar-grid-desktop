@@ -1,4 +1,5 @@
 import {
+  AfterViewChecked,
   Component,
   Input,
   Output,
@@ -6,6 +7,7 @@ import {
   ViewChild,
   ElementRef,
   OnChanges,
+  OnDestroy,
   SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -14,7 +16,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { GridMessage, GridChannel, GridMessageAttachment } from '../../interfaces/grid.interface';
+import { GridMessage, GridChannel, GridMessageAttachment, GridHighlightRequest } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 import { GridMentionService, MentionSuggestion } from '../../services/grid-mention.service';
 import { GridFileUploadService } from '../../services/grid-file-upload.service';
@@ -26,7 +28,7 @@ import { GridFileUploadService } from '../../services/grid-file-upload.service';
   templateUrl: './thread-panel.component.html',
   styleUrls: ['./thread-panel.component.scss'],
 })
-export class ThreadPanelComponent implements OnChanges {
+export class ThreadPanelComponent implements OnChanges, AfterViewChecked, OnDestroy {
   @Input() parentMessage: GridMessage | null = null;
   @Input() replies: GridMessage[] = [];
   @Input() channelName = '';
@@ -35,6 +37,8 @@ export class ThreadPanelComponent implements OnChanges {
   @Input() channel: GridChannel | null = null;
   @Input() readOnly = false;
   @Input() followed = false;
+  // Jump-to-message: scroll this reply into view and flash it once rendered
+  @Input() highlightRequest: GridHighlightRequest | null = null;
 
   @Output() close = new EventEmitter<void>();
   @Output() replySent = new EventEmitter<string>();
@@ -42,8 +46,16 @@ export class ThreadPanelComponent implements OnChanges {
   @Output() followToggled = new EventEmitter<void>();
 
   @ViewChild('replyInput') replyInput!: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('repliesList') repliesList?: ElementRef<HTMLElement>;
 
   replyContent = '';
+
+  // Pending jump target (replies load asynchronously after the panel opens)
+  private pendingHighlightId: string | null = null;
+  private highlightDeadline = 0;
+  private static readonly HIGHLIGHT_WAIT_MS = 10000; // replies may take a moment to load
+  private static readonly HIGHLIGHT_MS = 2500;
+  private highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Mention autocomplete state
   showMentionDropdown = false;
@@ -60,6 +72,10 @@ export class ThreadPanelComponent implements OnChanges {
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['highlightRequest'] && this.highlightRequest) {
+      this.pendingHighlightId = this.highlightRequest.messageId;
+      this.highlightDeadline = Date.now() + ThreadPanelComponent.HIGHLIGHT_WAIT_MS;
+    }
     if ((changes['userMap'] || changes['channelId'] || changes['channel']) && this.channelId && this.userMap.size > 0) {
       this.mentionService.loadChannelMembers(this.channelId, this.userMap, this.channel);
     }
@@ -79,6 +95,46 @@ export class ThreadPanelComponent implements OnChanges {
         this.replyInput.nativeElement.style.height = 'auto';
       }
     }
+  }
+
+  ngAfterViewChecked(): void {
+    if (this.pendingHighlightId) {
+      this.tryApplyHighlight();
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+  }
+
+  /**
+   * Scroll the pending jump target into view and flash it. Retried from
+   * ngAfterViewChecked until the reply row exists; time-bounded so a reply
+   * that never loads can't leave a dangling request.
+   */
+  private tryApplyHighlight(): void {
+    const id = this.pendingHighlightId;
+    const list = this.repliesList?.nativeElement;
+    if (!id || !list) return;
+
+    const row = list.querySelector<HTMLElement>(`[data-message-id="${id}"]`);
+    if (!row) {
+      if (Date.now() > this.highlightDeadline) {
+        this.pendingHighlightId = null;
+      }
+      return;
+    }
+
+    this.pendingHighlightId = null;
+    row.scrollIntoView({ block: 'center' });
+    row.classList.remove('highlighted');
+    void row.offsetWidth; // restart the animation when re-jumping to the same row
+    row.classList.add('highlighted');
+    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+    this.highlightTimer = setTimeout(() => {
+      row.classList.remove('highlighted');
+      this.highlightTimer = null;
+    }, ThreadPanelComponent.HIGHLIGHT_MS);
   }
 
   onClose(): void {

@@ -14,6 +14,8 @@ import { UserPresenceService } from '../../services/user-presence.service';
 import { GRID_AUTH_PROVIDER, GRID_USER_DATA_PROVIDER, GridAuthProvider, GridUserDataProvider } from '../../tokens/grid-tokens';
 import {
   GridChannel,
+  GridHighlightRequest,
+  GridJumpTarget,
   GridMessage,
   GridMessageAttachment,
   GridTypingUser,
@@ -71,6 +73,21 @@ export class GridComponent implements OnInit, OnDestroy {
   hasMoreMessages = false;
   nextCursor: string | null = null;
   unreadCountOnEntry = 0; // Unread count when entering a channel (for "New" divider)
+
+  // Jump-to-message / history mode. Set while the feed shows a window that
+  // does not reach the channel's newest message (search result, activity item
+  // or notification click). Live messages are buffered in messageBuffer until
+  // the user pages forward to the tail or clicks "Jump to latest".
+  hasNewerMessages = false;
+  newerCursor: string | null = null;
+  isLoadingNewer = false;
+  highlightRequest: GridHighlightRequest | null = null;
+  threadHighlightRequest: GridHighlightRequest | null = null;
+  private highlightToken = 0;
+  /** Live messages held back while viewing history (shown on the jump pill). */
+  get bufferedNewerCount(): number {
+    return this.hasNewerMessages ? this.messageBuffer.length : 0;
+  }
 
   // Typing indicators
   typingUsers: GridTypingUser[] = [];
@@ -420,9 +437,11 @@ export class GridComponent implements OnInit, OnDestroy {
             ) {
               this.threadReplies = [...this.threadReplies, message];
             }
-          } else if (this.isLoadingMessages) {
+          } else if (this.isLoadingMessages || this.hasNewerMessages) {
             // Buffer messages during load to prevent race condition
-            // where WebSocket messages arrive before HTTP load completes
+            // where WebSocket messages arrive before HTTP load completes,
+            // and while viewing history (the window doesn't reach the tail;
+            // the buffer is merged once the user gets back to the latest page)
             if (!this.isMessageDuplicate(message, this.messageBuffer)) {
               this.messageBuffer.push(message);
               // Increment unread count to keep "New" divider in same position
@@ -440,8 +459,10 @@ export class GridComponent implements OnInit, OnDestroy {
               }
             }
           }
-          // Mark as read
-          this.gridWs.markRead(this.currentChannel.id, message.id);
+          // Mark as read — but not while viewing history: the user hasn't seen it
+          if (!this.hasNewerMessages) {
+            this.gridWs.markRead(this.currentChannel.id, message.id);
+          }
         }
         // Update channel list (last message preview, unread count)
         this.updateChannelLastMessage(message);
@@ -1112,22 +1133,31 @@ export class GridComponent implements OnInit, OnDestroy {
   /**
    * Select a channel
    */
-  selectChannel(channel: GridChannel): void {
-    if (this.currentChannel?.id === channel.id) return;
+  selectChannel(channel: GridChannel, opts: { anchorMessageId?: string; parentId?: string | null } = {}): void {
+    if (this.currentChannel?.id === channel.id) {
+      if (opts.anchorMessageId) {
+        this.jumpWithinCurrentChannel(opts.anchorMessageId, opts.parentId);
+      }
+      return;
+    }
 
     // Leave previous channel
     if (this.currentChannel) {
       this.gridWs.leaveChannel(this.currentChannel.id);
     }
 
-    // Capture unread count BEFORE clearing (for "New" divider)
-    this.unreadCountOnEntry = channel.unread_count || 0;
+    // Capture unread count BEFORE clearing (for "New" divider). A jump lands
+    // on an arbitrary point in history, where the divider would be misleading.
+    this.unreadCountOnEntry = opts.anchorMessageId ? 0 : (channel.unread_count || 0);
 
     this.currentChannel = channel;
     this.gridNotification.setCurrentChannel(channel.id);
     this.messages = [];
     this.messageBuffer = []; // Clear buffer when changing channels
     this.typingUsers = [];
+    this.resetHistoryMode();
+    this.highlightRequest = null;
+    this.threadHighlightRequest = null;
     this.closeThreadPanel();
     this.isFilesPanelOpen = false; // Close files panel when changing channels
     this.isMembersPopupOpen = false; // Close members popup when changing channels
@@ -1140,8 +1170,12 @@ export class GridComponent implements OnInit, OnDestroy {
     // Join new channel via WebSocket
     this.gridWs.joinChannel(channel.id);
 
-    // Load messages
-    this.loadMessages();
+    // Load messages — either the live tail or a window around the target
+    if (opts.anchorMessageId) {
+      this.loadMessagesAround(opts.anchorMessageId);
+    } else {
+      this.loadMessages();
+    }
 
     // On mobile, close sidebar when channel is selected
     if (this.isMobileView) {
@@ -1154,7 +1188,7 @@ export class GridComponent implements OnInit, OnDestroy {
   /**
    * Load messages for current channel
    */
-  loadMessages(cursor?: string): void {
+  loadMessages(cursor?: string, onLoaded?: () => void): void {
     if (!this.currentChannel) return;
 
     // Cancel any in-flight load — its response would belong to a previous
@@ -1162,6 +1196,10 @@ export class GridComponent implements OnInit, OnDestroy {
     this.activeLoadMessages?.unsubscribe();
 
     this.isLoadingMessages = true;
+    if (!cursor) {
+      // A fresh tail load always ends history mode
+      this.resetHistoryMode();
+    }
     const channelId = this.currentChannel.id;
     const userDocId = this.getCurrentUserDocId();
     console.log('Grid: Loading messages for channel:', channelId, 'user:', userDocId);
@@ -1177,34 +1215,19 @@ export class GridComponent implements OnInit, OnDestroy {
         const messages = response.results || [];
         console.log('Grid: Received messages:', messages.length, messages);
 
-        let loadedMessages: GridMessage[];
         if (cursor) {
           // Prepend older messages
-          loadedMessages = [...messages.reverse(), ...this.messages];
+          this.messages = [...messages.reverse(), ...this.messages];
         } else {
           // Initial load - messages come newest first, reverse for display
-          loadedMessages = messages.reverse();
+          this.messages = messages.reverse();
         }
 
-        // Create a Set of loaded message IDs for O(1) lookup
-        const loadedIds = new Set(loadedMessages.map(m => m.id));
-
-        // Merge buffered messages that aren't duplicates
-        const newBufferedMessages = this.messageBuffer.filter(
-          m => !loadedIds.has(m.id) && !this.isMessageDuplicate(m, loadedMessages)
-        );
-
-        if (newBufferedMessages.length > 0) {
-          console.log('Grid: Merging', newBufferedMessages.length, 'buffered messages');
+        // Merge anything the WebSocket delivered while the load was in flight
+        // (skipped while viewing history: the buffer waits for the tail)
+        if (!this.hasNewerMessages) {
+          this.mergeBufferedMessages();
         }
-
-        // Combine and sort by created_at to ensure proper order
-        this.messages = [...loadedMessages, ...newBufferedMessages].sort(
-          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
-
-        // Clear buffer after merging
-        this.messageBuffer = [];
 
         // Set pagination state from API response
         this.hasMoreMessages = !!response.next_cursor;
@@ -1213,10 +1236,10 @@ export class GridComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
 
         // Mark as read
-        if (this.currentChannel && this.messages.length > 0) {
-          const lastMessage = this.messages[this.messages.length - 1];
-          this.gridWs.markRead(this.currentChannel.id, lastMessage.id);
+        if (!this.hasNewerMessages) {
+          this.markLastMessageRead();
         }
+        onLoaded?.();
       },
       error: (error) => {
         if (this.currentChannel?.id !== channelId) return;
@@ -1236,6 +1259,211 @@ export class GridComponent implements OnInit, OnDestroy {
     if (this.nextCursor) {
       this.loadMessages(this.nextCursor);
     }
+  }
+
+  /**
+   * Fold WebSocket-buffered messages into the feed (deduped, sorted) and
+   * clear the buffer.
+   */
+  private mergeBufferedMessages(): void {
+    if (this.messageBuffer.length === 0) return;
+    const loadedIds = new Set(this.messages.map(m => m.id));
+    const fresh = this.messageBuffer.filter(
+      m => !loadedIds.has(m.id) && !this.isMessageDuplicate(m, this.messages)
+    );
+    this.messageBuffer = [];
+    if (fresh.length === 0) return;
+    console.log('Grid: Merging', fresh.length, 'buffered messages');
+    this.messages = [...this.messages, ...fresh].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  }
+
+  private markLastMessageRead(): void {
+    if (this.currentChannel && this.messages.length > 0) {
+      const lastMessage = this.messages[this.messages.length - 1];
+      this.gridWs.markRead(this.currentChannel.id, lastMessage.id);
+    }
+  }
+
+  private resetHistoryMode(): void {
+    this.hasNewerMessages = false;
+    this.newerCursor = null;
+    this.isLoadingNewer = false;
+  }
+
+  /** Ask the message list to scroll a message into view and flash it. */
+  private requestHighlight(messageId: string): void {
+    this.highlightRequest = { messageId, token: ++this.highlightToken };
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Take the user to a specific message: switch channel if needed (fetching
+   * it when it isn't in the sidebar), load a window around the message,
+   * highlight it, and open the thread when the target is a reply.
+   * Used by search results, activity items and notification clicks.
+   */
+  jumpToMessage(target: GridJumpTarget): void {
+    if (!target.channelId) return;
+    this.ensureChannel(target.channelId, (channel) => {
+      if (target.messageId) {
+        this.selectChannel(channel, { anchorMessageId: target.messageId, parentId: target.parentId });
+      } else {
+        this.selectChannel(channel);
+      }
+    });
+  }
+
+  /** Find a channel in the sidebar list, or fetch it and add it, then continue. */
+  private ensureChannel(channelId: string, then: (channel: GridChannel) => void): void {
+    const existing = this.channels.find(c => c.id === channelId);
+    if (existing) {
+      then(existing);
+      return;
+    }
+    this.gridApi.getChannel(channelId).subscribe({
+      next: (channel) => {
+        this.channels = [channel, ...this.channels];
+        this.populateDmUsers();
+        this.cdr.markForCheck();
+        then(channel);
+      },
+      error: (error) => {
+        console.error('Grid: Error fetching channel for jump:', error);
+      },
+    });
+  }
+
+  /**
+   * Jump to a message in the channel that is already open. If the feed
+   * message (the target, or its parent for a reply) is rendered, just
+   * highlight it; otherwise load a window around it.
+   */
+  private jumpWithinCurrentChannel(messageId: string, parentId?: string | null): void {
+    const feedId = parentId || messageId;
+    const present = this.messages.find(m => m.id === feedId && !m.parent);
+    if (!present) {
+      this.loadMessagesAround(messageId);
+      return;
+    }
+    this.requestHighlight(feedId);
+    if (parentId) {
+      this.openThreadPanel(present);
+      this.threadHighlightRequest = { messageId, token: ++this.highlightToken };
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Load a window of messages centred on `anchorMessageId` (a reply id is
+   * resolved to its parent by the server) and enter history mode when the
+   * window doesn't reach the channel's newest message.
+   */
+  private loadMessagesAround(anchorMessageId: string): void {
+    if (!this.currentChannel) return;
+    this.activeLoadMessages?.unsubscribe();
+
+    this.isLoadingMessages = true;
+    const channelId = this.currentChannel.id;
+    this.cdr.markForCheck();
+
+    this.activeLoadMessages = this.gridApi.getMessagesAround(channelId, anchorMessageId).subscribe({
+      next: (response) => {
+        if (this.currentChannel?.id !== channelId) return;
+
+        if (!response?.anchor_id) {
+          // Backend without window support, or the anchor is gone: show the
+          // live tail and highlight the message if it happens to be there.
+          console.warn('Grid: around= returned no anchor, falling back to latest messages');
+          this.isLoadingMessages = false;
+          this.loadMessages(undefined, () => {
+            if (this.messages.some(m => m.id === anchorMessageId)) {
+              this.requestHighlight(anchorMessageId);
+            }
+          });
+          return;
+        }
+
+        this.messages = (response.results || []).slice().reverse();
+        this.hasMoreMessages = !!response.next_cursor;
+        this.nextCursor = response.next_cursor || null;
+        this.hasNewerMessages = !!response.has_newer;
+        this.newerCursor = response.prev_cursor || null;
+        this.isLoadingNewer = false;
+        this.isLoadingMessages = false;
+
+        if (!this.hasNewerMessages) {
+          // The window reaches the tail — behave like a normal page
+          this.mergeBufferedMessages();
+          this.markLastMessageRead();
+        }
+
+        this.requestHighlight(response.anchor_id);
+        if (response.anchor_reply_id) {
+          const parent = this.messages.find(m => m.id === response.anchor_id);
+          if (parent) {
+            this.openThreadPanel(parent);
+            this.threadHighlightRequest = { messageId: response.anchor_reply_id, token: ++this.highlightToken };
+          }
+        }
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        if (this.currentChannel?.id !== channelId) return;
+        console.error('Grid: Error loading messages around', anchorMessageId, error);
+        this.isLoadingMessages = false;
+        // Degrade to the live tail rather than leaving an empty feed
+        this.loadMessages();
+      },
+    });
+  }
+
+  /**
+   * Page forward while viewing history (the list is scrolled near its
+   * bottom). Leaves history mode once the tail is reached.
+   */
+  loadNewerMessages(): void {
+    if (!this.currentChannel || !this.hasNewerMessages || !this.newerCursor || this.isLoadingNewer) return;
+    const channelId = this.currentChannel.id;
+    this.isLoadingNewer = true;
+    this.cdr.markForCheck();
+
+    this.gridApi.getMessagesAfter(channelId, this.newerCursor).subscribe({
+      next: (response) => {
+        if (this.currentChannel?.id !== channelId) return;
+        this.isLoadingNewer = false;
+
+        const known = new Set(this.messages.map(m => m.id));
+        const newer = (response.results || []).slice().reverse().filter(m => !known.has(m.id));
+        if (newer.length > 0) {
+          this.messages = [...this.messages, ...newer];
+        }
+        this.hasNewerMessages = !!response.has_newer;
+        this.newerCursor = response.prev_cursor || this.newerCursor;
+
+        if (!this.hasNewerMessages) {
+          this.newerCursor = null;
+          this.mergeBufferedMessages();
+          this.markLastMessageRead();
+        }
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        if (this.currentChannel?.id !== channelId) return;
+        console.error('Grid: Error loading newer messages:', error);
+        this.isLoadingNewer = false;
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  /** "Jump to latest" while viewing history: reload the live tail. */
+  exitHistoryMode(): void {
+    if (!this.currentChannel) return;
+    this.resetHistoryMode();
+    this.highlightRequest = null;
+    this.loadMessages();
   }
 
   /**
@@ -1385,11 +1613,9 @@ export class GridComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  onSearchResultSelected(event: { channelId: string; messageId: string }): void {
+  onSearchResultSelected(event: GridJumpTarget): void {
     this.closeSearch();
-    // Reuse the activity-item navigation (jumps to the channel, fetching it
-    // if it's not already in the sidebar list)
-    this.onActivityItemSelected(event);
+    this.jumpToMessage(event);
   }
 
   /**
@@ -1828,26 +2054,11 @@ export class GridComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle activity item selected - navigate to the channel
+   * Handle activity item selected - navigate to the channel and, when the
+   * item carries a message id, land on that message.
    */
   onActivityItemSelected(event: { channelId: string; messageId: string }): void {
-    const channel = this.channels.find(c => c.id === event.channelId);
-    if (channel) {
-      this.selectChannel(channel);
-    } else {
-      // Channel not in list - fetch it first
-      this.gridApi.getChannel(event.channelId).subscribe({
-        next: (channel) => {
-          this.channels = [channel, ...this.channels];
-          this.populateDmUsers();
-          this.selectChannel(channel);
-          this.cdr.markForCheck();
-        },
-        error: (error) => {
-          console.error('Error fetching channel for activity item:', error);
-        },
-      });
-    }
+    this.jumpToMessage({ channelId: event.channelId, messageId: event.messageId || '' });
   }
 
   /**
