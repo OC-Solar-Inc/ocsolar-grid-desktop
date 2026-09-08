@@ -42,6 +42,7 @@
     <!-- Sidebar / Channel List -->
     <aside class="sidebar" [class.open]="isSidebarOpen" [class.mobile]="isMobileView">
       <lib-channel-list
+        [showSearchBar]="showSearchBar"
         [channels]="channels"
         [currentChannel]="currentChannel"
         [isLoading]="isLoadingChannels"
@@ -92,7 +93,7 @@
               mat-icon-button
               class="search-button"
               (click)="openSearch()"
-              matTooltip="Search messages (⌘K)"
+              matTooltip="Search Grid (⌘K)"
             >
               <mat-icon>search</mat-icon>
             </button>
@@ -247,6 +248,8 @@
   <lib-message-search
     *ngIf="isSearchOpen"
     [userMap]="userMap"
+    [currentUserId]="currentUserId"
+    (userSelected)="onSearchUserSelected($event)"
     [channels]="channels"
     [currentChannel]="currentChannel"
     (closed)="closeSearch()"

@@ -32,6 +32,7 @@ import { GRID_CONFIG, GRID_AUTH_PROVIDER, GridConfig, GridAuthProvider } from '.
   styleUrls: ['./channel-list.component.scss'],
 })
 export class ChannelListComponent implements OnInit, OnDestroy {
+  @Input() showSearchBar = true;
   @Input() channels: GridChannel[] = [];
   @Input() currentChannel: GridChannel | null = null;
   @Input() isLoading = false;

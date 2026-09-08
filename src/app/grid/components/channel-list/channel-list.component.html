@@ -193,27 +193,15 @@
     <button
       type="button"
       class="message-search-bar"
+      *ngIf="showSearchBar"
       (click)="searchRequested.emit()"
-      matTooltip="Find a message in any channel"
+      matTooltip="Search conversations, people and messages"
       matTooltipPosition="right"
     >
-      <mat-icon>manage_search</mat-icon>
-      <span class="message-search-label">Search messages</span>
+      <mat-icon>search</mat-icon>
+      <span class="message-search-label">Search Grid</span>
       <kbd>{{ searchShortcutLabel }}</kbd>
     </button>
-
-    <!-- Search -->
-    <div class="search-container">
-      <mat-icon>search</mat-icon>
-      <input
-        type="text"
-        placeholder="Search for projects and groups"
-        [ngModel]="searchQuery"
-        (ngModelChange)="onSearchChange($event)"
-        class="search-input"
-      />
-      <mat-spinner *ngIf="isSearching" diameter="16" class="search-spinner"></mat-spinner>
-    </div>
 
     <div class="conversation-filter-bar">
       <button class="conversation-filter-chip" [class.active]="messageFilter === 'all'" (click)="setMessageFilter('all')">All</button>

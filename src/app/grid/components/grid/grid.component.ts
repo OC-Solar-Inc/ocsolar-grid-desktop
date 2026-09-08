@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, HostBinding, ChangeDetectionStrategy, ChangeDetectorRef, ViewChild, Inject, Output, EventEmitter, NgZone } from '@angular/core';
+import { Input, Component, OnInit, OnDestroy, HostListener, HostBinding, ChangeDetectionStrategy, ChangeDetectorRef, ViewChild, Inject, Output, EventEmitter, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject, Subscription, forkJoin } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -53,6 +53,7 @@ import { MessageSearchComponent } from '../message-search/message-search.compone
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class GridComponent implements OnInit, OnDestroy {
+  @Input() showSearchBar = true;
   // Reference to channel-list for accessing filteredUsers
   @ViewChild(ChannelListComponent) channelListRef!: ChannelListComponent;
 
@@ -1611,6 +1612,11 @@ export class GridComponent implements OnInit, OnDestroy {
   closeSearch(): void {
     this.isSearchOpen = false;
     this.cdr.markForCheck();
+  }
+
+  onSearchUserSelected(user: User): void {
+    this.closeSearch();
+    this.channelListRef?.selectUserForDm(user);
   }
 
   onSearchResultSelected(event: GridJumpTarget): void {
