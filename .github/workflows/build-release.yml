@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-mac:
-    runs-on: macos-latest
+    runs-on: macos-15  # macos-latest = macOS 26 since 2026-08-31; electron-builder keychain unlock fails there
     steps:
       - uses: actions/checkout@v4
 
