@@ -1,304 +1,244 @@
-import {
-  AfterViewInit,
-  Component,
-  ElementRef,
-  EventEmitter,
-  HostListener,
-  Input,
-  OnDestroy,
-  OnInit,
-  Output,
-  ViewChild,
-} from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { A11yModule } from '@angular/cdk/a11y';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Subject, Subscription, of } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
+import { Subject, Subscription, forkJoin, of } from 'rxjs';
+import { debounceTime, catchError } from 'rxjs/operators';
 import { GridApiService } from '../../services/grid-api.service';
 import { TEAM_MENTION_LABEL, isTeamMention } from '../../services/grid-mention.service';
-import {
-  GridChannel,
-  GridJumpTarget,
-  GridMessage,
-  GridMessageSearchResponse,
-} from '../../interfaces/grid.interface';
+import { GridChannel, GridJumpTarget, GridMessage, GridMessageSearchResponse } from '../../interfaces/grid.interface';
 import { User } from '../../interfaces/user';
 
 export type MessageSearchScope = 'all' | 'channel';
-
-interface SnippetPart {
-  text: string;
-  match: boolean;
-}
-
-/** A search hit, pre-rendered for the template. */
+type SearchKind = 'all' | 'channel' | 'person' | 'message';
+interface SnippetPart { text: string; match: boolean; }
 export interface MessageSearchRow {
-  message: GridMessage;
-  sender: string;
-  channel: string;
-  time: string;
-  isReply: boolean;
-  parts: SnippetPart[];
+  message: GridMessage; sender: string; channel: string; time: string;
+  isReply: boolean; parts: SnippetPart[];
 }
-
-interface SearchRequest {
-  query: string;
-  scope: MessageSearchScope;
+export interface GridSearchEntry {
+  kind: 'channel' | 'person' | 'message'; id: string; label: string; detail: string;
+  channel?: GridChannel; user?: User; message?: MessageSearchRow;
 }
-
 const EMPTY_PAGE: GridMessageSearchResponse = { results: [], count: 0, offset: 0, has_more: false };
 
-/**
- * Message search overlay (⌘K / Ctrl+K, the header magnifier, or the sidebar
- * search bar). Debounces input, queries the backend search endpoint
- * (websearch syntax + substring fallback), and emits the chosen result as a
- * jump target for the shell to land on. Supports "this channel only" scope,
- * keyboard navigation and "Show more" paging.
- */
+/** One search for conversations, people and message history. */
 @Component({
-  selector: 'lib-message-search',
-  standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatProgressSpinnerModule],
-  templateUrl: './message-search.component.html',
-  styleUrls: ['./message-search.component.scss'],
+  selector: 'lib-message-search', standalone: true,
+  imports: [CommonModule, FormsModule, A11yModule, MatIconModule, MatProgressSpinnerModule],
+  templateUrl: './message-search.component.html', styleUrls: ['./message-search.component.scss'],
 })
-export class MessageSearchComponent implements OnInit, AfterViewInit, OnDestroy {
+export class MessageSearchComponent implements OnInit, OnChanges, AfterViewInit, OnDestroy {
   @Input() userMap: Map<string, User> = new Map();
   @Input() channels: GridChannel[] = [];
   @Input() currentChannel: GridChannel | null = null;
-
+  @Input() currentUserId: string | null = null;
   @Output() closed = new EventEmitter<void>();
   @Output() resultSelected = new EventEmitter<GridJumpTarget>();
-
+  @Output() userSelected = new EventEmitter<User>();
   @ViewChild('searchInput') searchInput?: ElementRef<HTMLInputElement>;
   @ViewChild('resultsBody') resultsBody?: ElementRef<HTMLElement>;
 
   readonly pageSize = 15;
-  /** Characters of context kept on each side of the first match in a snippet. */
+  readonly filters: { kind: SearchKind; label: string }[] = [
+    { kind: 'all', label: 'Everything' }, { kind: 'channel', label: 'Conversations' },
+    { kind: 'person', label: 'People' }, { kind: 'message', label: 'Messages' },
+  ];
   private static readonly SNIPPET_CONTEXT = 90;
-
   query = '';
   scope: MessageSearchScope = 'all';
+  kind: SearchKind = 'all';
   rows: MessageSearchRow[] = [];
+  matchingChannels: GridChannel[] = [];
+  matchingPeople: User[] = [];
   activeIndex = -1;
   isSearching = false;
   isPaging = false;
   hasSearched = false;
   hasMore = false;
-  /** Zero-based page of the current query/scope (pageSize rows per page). */
   page = 0;
-
+  searchError = '';
   private terms: string[] = [];
-  private searchSubject = new Subject<SearchRequest>();
+  private remoteChannels: GridChannel[] = [];
+  private searchSubject = new Subject<void>();
   private sub?: Subscription;
+  private requestSub?: Subscription;
   private pageSub?: Subscription;
+  private revision = 0;
+  private destroyed = false;
 
   constructor(private gridApi: GridApiService) {}
-
   ngOnInit(): void {
-    this.sub = this.searchSubject
-      .pipe(
-        debounceTime(150),
-        distinctUntilChanged((a, b) => a.query === b.query && a.scope === b.scope),
-        switchMap((req) => {
-          this.pageSub?.unsubscribe();
-          this.isPaging = false;
-          this.page = 0;
-          const trimmed = req.query.trim();
-          if (trimmed.length < 2) {
-            this.isSearching = false;
-            this.hasSearched = false;
-            return of<GridMessageSearchResponse>(EMPTY_PAGE);
-          }
-          this.isSearching = true;
-          this.hasSearched = true;
-          // Keep the stream alive if one search errors
-          return this.gridApi
-            .searchMessages(trimmed, { limit: this.pageSize, offset: 0, channelId: this.scopeChannelId(req.scope) })
-            .pipe(catchError(() => of<GridMessageSearchResponse>(EMPTY_PAGE)));
-        })
-      )
-      .subscribe((result) => this.showPage(result));
+    this.sub = this.searchSubject.pipe(debounceTime(150)).subscribe(() => this.runSearch());
   }
-
-  /** Replace the visible rows with one page of results. */
-  private showPage(result: GridMessageSearchResponse): void {
-    this.rows = result.results.map((m) => this.toRow(m));
-    this.hasMore = result.has_more;
-    this.activeIndex = this.rows.length > 0 ? 0 : -1;
-    this.isSearching = false;
-    this.isPaging = false;
-    if (this.resultsBody) {
-      this.resultsBody.nativeElement.scrollTop = 0;
-    }
-  }
-
-  ngAfterViewInit(): void {
-    // `autofocus` is unreliable for dynamically inserted elements
-    this.searchInput?.nativeElement.focus();
-  }
-
+  ngOnChanges(): void { this.refreshEntities(); }
+  ngAfterViewInit(): void { this.searchInput?.nativeElement.focus(); }
   ngOnDestroy(): void {
-    this.sub?.unsubscribe();
-    this.pageSub?.unsubscribe();
+    this.destroyed = true;
+    this.sub?.unsubscribe(); this.requestSub?.unsubscribe(); this.pageSub?.unsubscribe();
   }
-
-  // ---- Keyboard ----
-
-  @HostListener('document:keydown', ['$event'])
-  onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.close();
-      return;
-    }
-    if (this.rows.length === 0) return;
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      this.moveActive(1);
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      this.moveActive(-1);
-    } else if (event.key === 'ArrowRight' && (event.metaKey || event.ctrlKey || event.altKey)) {
-      event.preventDefault();
-      this.nextPage();
-    } else if (event.key === 'ArrowLeft' && (event.metaKey || event.ctrlKey || event.altKey)) {
-      event.preventDefault();
-      this.prevPage();
-    } else if (event.key === 'Enter') {
-      event.preventDefault();
-      const row = this.rows[this.activeIndex] ?? this.rows[0];
-      if (row) this.selectRow(row);
-    }
-  }
-
-  private moveActive(delta: number): void {
-    const count = this.rows.length;
-    this.activeIndex = ((this.activeIndex + delta) % count + count) % count;
-    // Let the row render its active state, then keep it in view
-    setTimeout(() => {
-      this.resultsBody?.nativeElement
-        .querySelector<HTMLElement>('.search-result.active')
-        ?.scrollIntoView({ block: 'nearest' });
-    });
-  }
-
-  // ---- Input / scope ----
 
   onQueryChange(value: string): void {
     this.query = value;
     this.terms = this.buildTerms(value);
-    this.searchSubject.next({ query: value, scope: this.scope });
+    ++this.revision;
+    // Cancel immediately, not after debounce: a cleared/changed query must
+    // never be repopulated by the previous response (including pagination).
+    this.requestSub?.unsubscribe(); this.pageSub?.unsubscribe();
+    this.remoteChannels = [];
+    this.searchError = '';
+    this.page = 0; this.hasMore = false; this.isPaging = false;
+    this.hasSearched = value.trim().length >= 2;
+    this.isSearching = this.hasSearched;
+    if (!this.hasSearched) this.rows = [];
+    this.refreshEntities(); this.activeIndex = this.entries.length ? 0 : -1;
+    this.searchSubject.next();
   }
 
-  setScope(scope: MessageSearchScope): void {
-    if (this.scope === scope) return;
-    this.scope = scope;
-    this.activeIndex = -1;
-    this.searchSubject.next({ query: this.query, scope });
-    this.searchInput?.nativeElement.focus();
-  }
-
-  private scopeChannelId(scope: MessageSearchScope): string | null {
-    return scope === 'channel' && this.currentChannel ? this.currentChannel.id : null;
-  }
-
-  currentChannelLabel(): string {
-    const channel = this.currentChannel;
-    if (!channel) return '';
-    if (this.isDmChannel(channel)) return channel.dm_user?.display_name || 'Direct Message';
-    return channel.name || 'This channel';
-  }
-
-  isDmChannel(channel: GridChannel | null): boolean {
-    return !!channel && (channel.channel_type === 'dm' || channel.channel_type === 'direct');
-  }
-
-  clear(): void {
-    this.query = '';
-    this.terms = [];
-    this.rows = [];
-    this.activeIndex = -1;
-    this.hasMore = false;
-    this.hasSearched = false;
-    this.page = 0;
-    this.pageSub?.unsubscribe();
-    this.isPaging = false;
-    this.searchInput?.nativeElement.focus();
-  }
-
-  close(): void {
-    this.closed.emit();
-  }
-
-  onBackdropClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget) {
-      this.close();
-    }
-  }
-
-  // ---- Results ----
-
-  // ---- Pagination ----
-
-  /** 1-based index of the first row on the current page (for "31–60"). */
-  get pageStart(): number {
-    return this.page * this.pageSize + 1;
-  }
-
-  get pageEnd(): number {
-    return this.page * this.pageSize + this.rows.length;
-  }
-
-  get canGoPrev(): boolean {
-    return this.page > 0 && !this.isPaging;
-  }
-
-  get canGoNext(): boolean {
-    return this.hasMore && !this.isPaging;
-  }
-
-  nextPage(): void {
-    if (this.canGoNext) this.goToPage(this.page + 1);
-  }
-
-  prevPage(): void {
-    if (this.canGoPrev) this.goToPage(this.page - 1);
-  }
-
-  private goToPage(page: number): void {
-    const trimmed = this.query.trim();
-    if (page < 0 || trimmed.length < 2) return;
-    this.isPaging = true;
-    this.pageSub?.unsubscribe();
-    this.pageSub = this.gridApi
-      .searchMessages(trimmed, {
-        limit: this.pageSize,
-        offset: page * this.pageSize,
-        channelId: this.scopeChannelId(this.scope),
-      })
-      .pipe(catchError(() => of<GridMessageSearchResponse>(EMPTY_PAGE)))
-      .subscribe((result) => {
-        this.page = page;
-        this.showPage(result);
-      });
-  }
-
-  selectRow(row: MessageSearchRow): void {
-    const message = row.message;
-    if (!message.channel) return;
-    this.resultSelected.emit({
-      channelId: message.channel,
-      messageId: message.id,
-      parentId: message.parent || null,
+  private runSearch(): void {
+    if (!this.hasSearched) return;
+    const revision = this.revision;
+    this.requestSub = forkJoin({
+      channels: this.gridApi.searchChannels(this.query.trim(), 100).pipe(catchError(() => {
+        if (revision === this.revision) this.searchError = 'Some conversations could not be searched. Try again.';
+        return of<GridChannel[]>([]);
+      })),
+      messages: this.gridApi.searchMessages(this.query.trim(), {
+        limit: this.pageSize, offset: 0, channelId: this.scopeChannelId(this.scope),
+      }).pipe(catchError(() => {
+        if (revision === this.revision) this.searchError = 'Messages could not be searched. Try again.';
+        return of(EMPTY_PAGE);
+      })),
+    }).subscribe(({ channels, messages }) => {
+      if (revision !== this.revision) return;
+      this.remoteChannels = channels || [];
+      this.refreshEntities(); this.showPage(messages || EMPTY_PAGE);
     });
   }
 
-  trackByRowId(index: number, row: MessageSearchRow): string {
-    return row.message.id;
+  private refreshEntities(): void {
+    const query = this.query.trim().toLowerCase();
+    if (query.length < 2) { this.matchingChannels = []; this.matchingPeople = []; return; }
+    const channels = new Map<string, GridChannel>();
+    // Loaded records retain DM partner labels and membership metadata.
+    for (const channel of [...this.remoteChannels, ...this.channels]) channels.set(channel.id, channel);
+    this.matchingChannels = [...channels.values()].filter(c => !c.is_archived &&
+      (this.conversationLabel(c).toLowerCase().includes(query) || (c.description || '').toLowerCase().includes(query)))
+      .sort((a, b) => this.conversationLabel(a).localeCompare(this.conversationLabel(b)));
+    this.matchingPeople = [...this.userMap.entries()].filter(([id, user]) =>
+      id !== this.currentUserId && !(user.sRoles || [user.sRole]).includes('Customer') &&
+      `${this.personLabel(user)} ${user.sEmail || ''}`.toLowerCase().includes(query))
+      .map(([id, user]) => ({ ...user, id }))
+      .sort((a, b) => this.personLabel(a).localeCompare(this.personLabel(b)));
+  }
+
+  get entries(): GridSearchEntry[] {
+    const entries: GridSearchEntry[] = [];
+    const limit = this.kind === 'all' ? 5 : Number.MAX_SAFE_INTEGER;
+    if (this.scope === 'all' && (this.kind === 'all' || this.kind === 'channel')) {
+      entries.push(...this.matchingChannels.slice(0, limit).map(channel => ({
+        kind: 'channel' as const, id: `channel-${channel.id}`, label: this.conversationLabel(channel),
+        detail: this.isDmChannel(channel) ? 'Direct message' : channel.channel_type === 'group' ? 'Group chat' : 'Channel', channel,
+      })));
+    }
+    if (this.scope === 'all' && (this.kind === 'all' || this.kind === 'person')) {
+      entries.push(...this.matchingPeople.slice(0, limit).map(user => ({
+        kind: 'person' as const, id: `person-${user.id}`, label: this.personLabel(user), detail: user.sEmail || 'Open direct message', user,
+      })));
+    }
+    if (this.kind === 'all' || this.kind === 'message') {
+      entries.push(...this.rows.map(message => ({ kind: 'message' as const,
+        id: `message-${message.message.id}`, label: message.sender, detail: message.channel, message })));
+    }
+    return entries;
+  }
+  groupLabel(kind: SearchKind): string {
+    return this.filters.find(f => f.kind === kind)?.label || '';
+  }
+  personLabel(user: User): string { return user.sFullName || `${user.sFirstName || ''} ${user.sLastName || ''}`.trim() || 'Unknown user'; }
+  conversationLabel(channel: GridChannel): string {
+    return this.isDmChannel(channel) ? channel.dm_user?.display_name || channel.name || 'Direct message' : channel.name || 'Group chat';
+  }
+  setKind(kind: SearchKind): void {
+    this.kind = kind;
+    if (kind !== 'message') this.setScope('all');
+    this.activeIndex = this.entries.length ? 0 : -1;
+    this.resultsBody?.nativeElement.scrollTo({ top: 0 });
+    this.searchInput?.nativeElement.focus();
+  }
+  setScope(scope: MessageSearchScope): void {
+    if (scope === this.scope) return;
+    this.scope = scope;
+    if (scope === 'channel') this.kind = 'message';
+    this.onQueryChange(this.query);
+    this.searchInput?.nativeElement.focus();
+  }
+  private scopeChannelId(scope: MessageSearchScope): string | null { return scope === 'channel' ? this.currentChannel?.id || null : null; }
+  currentChannelLabel(): string { return this.currentChannel ? this.conversationLabel(this.currentChannel) : ''; }
+  isDmChannel(channel: GridChannel | null): boolean { return !!channel && ['dm', 'direct'].includes(channel.channel_type); }
+  clear(): void { this.onQueryChange(''); this.searchInput?.nativeElement.focus(); }
+  close(): void { this.closed.emit(); }
+  onBackdropClick(event: MouseEvent): void { if (event.target === event.currentTarget) this.close(); }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') { event.preventDefault(); this.close(); return; }
+    if ((event.target as HTMLElement)?.closest?.('button')) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const entries = this.entries;
+      if (!entries.length) return;
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      this.activeIndex = (this.activeIndex + delta + entries.length) % entries.length;
+      setTimeout(() => {
+        if (!this.destroyed) this.resultsBody?.nativeElement.querySelector<HTMLElement>('.search-result.active')?.scrollIntoView({ block: 'nearest' });
+      });
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const entry = this.entries[this.activeIndex];
+      if (entry) this.selectEntry(entry);
+    } else if ((event.metaKey || event.ctrlKey || event.altKey) && event.key === 'ArrowRight') {
+      event.preventDefault(); this.nextPage();
+    } else if ((event.metaKey || event.ctrlKey || event.altKey) && event.key === 'ArrowLeft') {
+      event.preventDefault(); this.prevPage();
+    }
+  }
+  selectEntry(entry: GridSearchEntry): void {
+    if (entry.channel) this.resultSelected.emit({ channelId: entry.channel.id, messageId: '' });
+    if (entry.user) this.userSelected.emit(entry.user);
+    if (entry.message && !this.isSearching && !this.isPaging) {
+      const message = entry.message.message;
+      if (message.channel) this.resultSelected.emit({ channelId: message.channel, messageId: message.id, parentId: message.parent || null });
+    }
+  }
+  trackByEntry(_index: number, entry: GridSearchEntry): string { return entry.id; }
+  get pageStart(): number { return this.page * this.pageSize + 1; }
+  get pageEnd(): number { return this.page * this.pageSize + this.rows.length; }
+  get canGoPrev(): boolean { return this.page > 0 && !this.isPaging && !this.isSearching; }
+  get canGoNext(): boolean { return this.hasMore && !this.isPaging && !this.isSearching; }
+  nextPage(): void { if (this.canGoNext) this.goToPage(this.page + 1); }
+  prevPage(): void { if (this.canGoPrev) this.goToPage(this.page - 1); }
+  private goToPage(page: number): void {
+    this.isPaging = true; this.searchError = '';
+    const revision = this.revision;
+    this.pageSub?.unsubscribe();
+    this.pageSub = this.gridApi.searchMessages(this.query.trim(), {
+      limit: this.pageSize, offset: page * this.pageSize, channelId: this.scopeChannelId(this.scope),
+    }).subscribe({ next: result => {
+      if (revision !== this.revision) return;
+      this.page = page; this.showPage(result || EMPTY_PAGE);
+    }, error: () => {
+      if (revision !== this.revision) return;
+      this.isPaging = false; this.searchError = 'This message page could not be loaded. Try again.';
+    }});
+  }
+  private showPage(result: GridMessageSearchResponse): void {
+    this.rows = result.results.map(m => this.toRow(m));
+    this.hasMore = result.has_more; this.isSearching = false; this.isPaging = false;
+    this.activeIndex = this.entries.length ? 0 : -1;
+    if (this.resultsBody) this.resultsBody.nativeElement.scrollTop = 0;
   }
 
   private toRow(message: GridMessage): MessageSearchRow {

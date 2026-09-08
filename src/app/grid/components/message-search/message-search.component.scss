@@ -258,6 +258,7 @@
 
   .result-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 8px;
     margin-bottom: 3px;
@@ -314,3 +315,32 @@
     }
   }
 }
+
+// The single Grid search, with grouped results and optional result-type filters.
+.search-panel { width: min(960px, 96vw); }
+.search-input-row .search-input { min-width: 0; }
+.search-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px 4px; }
+.search-filters .scope-chip { border: 1px solid var(--grid-chat-border); border-radius: 6px; background: transparent; color: var(--grid-chat-text-muted); padding: 8px 12px; cursor: pointer; font: inherit; }
+.search-filters .scope-chip.active { color: var(--grid-chat-text); background: var(--grid-chat-hover); }
+.result-section { color: var(--grid-chat-text-muted); font-size: 13px; font-weight: 600; margin: 18px 10px 6px; }
+.entity-result { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.entity-result > div { flex: 1; min-width: 0; }
+.entity-name, .entity-detail { display: block; overflow-wrap: anywhere; }
+.entity-name { color: var(--grid-chat-text); font-weight: 600; }
+.entity-detail { color: var(--grid-chat-text-muted); font-size: 12px; margin-top: 3px; }
+.entity-result mat-icon { color: var(--grid-chat-text-muted); flex-shrink: 0; }
+.entity-open { font-size: 18px; }
+.search-result.stale { opacity: 0.5; pointer-events: none; }
+.more-entities { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 12px; }
+.more-entities button, .search-error button { background: transparent; border: none; color: var(--grid-chat-accent, #1264a3); cursor: pointer; min-height: 36px; font: inherit; text-decoration: underline; }
+.search-error { padding: 12px 16px; color: var(--grid-chat-text); }
+.search-panel button:focus-visible { outline: 2px solid var(--grid-chat-accent, #1264a3); outline-offset: 2px; }
+.search-panel .search-clear, .search-panel .search-close { min-width: 36px; min-height: 36px; justify-content: center; }
+@media (max-width: 600px) {
+  .search-backdrop { padding-top: 3vh; }
+  .search-panel { max-height: 94vh; }
+  .search-scope { flex-wrap: wrap; }
+  .search-input-row .search-input { font-size: 16px; }
+  .result-time { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .search-backdrop { animation: none; } }

@@ -41,16 +41,10 @@ function darken(hex: string, amount: number): string {
     <div class="grid-shell">
       <div class="title-bar" [style.background]="titleBarBg">
         <div class="title-bar-spacer"></div>
-        <div class="title-bar-search" (click)="focusSearch()">
+        <button type="button" class="title-bar-search" (click)="gridRef.openSearch()" aria-label="Search Grid">
           <mat-icon>search</mat-icon>
-          <input
-            #searchInput
-            type="text"
-            placeholder="Search for projects and groups"
-            [ngModel]="searchQuery"
-            (ngModelChange)="onSearchChange($event)"
-          />
-        </div>
+          <span>Search messages, conversations and people</span>
+        </button>
         <div class="title-bar-actions">
           <button mat-icon-button [matMenuTriggerFor]="userMenu" class="profile-btn" matTooltip="Account">
             <mat-icon>account_circle</mat-icon>
@@ -73,7 +67,7 @@ function darken(hex: string, amount: number): string {
           </mat-menu>
         </div>
       </div>
-      <lib-grid #grid></lib-grid>
+      <lib-grid #grid [showSearchBar]="false"></lib-grid>
     </div>
   `,
   styles: [`
@@ -110,7 +104,10 @@ function darken(hex: string, amount: number): string {
       padding: 0 8px;
       gap: 6px;
       -webkit-app-region: no-drag;
-      cursor: text;
+      cursor: pointer;
+      color: rgba(255,255,255,0.9);
+      font: inherit;
+      font-size: 13px;
 
       mat-icon {
         font-size: 16px;
@@ -119,7 +116,7 @@ function darken(hex: string, amount: number): string {
         color: rgba(255, 255, 255, 0.4);
       }
 
-      input {
+      span {
         flex: 1;
         background: none;
         border: none;
@@ -171,9 +168,7 @@ function darken(hex: string, amount: number): string {
 })
 export class GridShellComponent implements OnInit, OnDestroy {
   @ViewChild('grid') gridRef!: GridComponent;
-  @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
-  searchQuery = '';
   titleBarBg = SIDEBAR_BG['theGrid'];
   appVersion = '';
   signedInName = '';
@@ -232,14 +227,7 @@ export class GridShellComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  onSearchChange(query: string): void {
-    this.searchQuery = query;
-    this.gridRef?.channelListRef?.onSearchChange(query);
-  }
 
-  focusSearch(): void {
-    this.searchInput?.nativeElement?.focus();
-  }
 
   async logout(): Promise<void> {
     this.identity.clearStoredDocId();

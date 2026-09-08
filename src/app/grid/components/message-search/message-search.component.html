@@ -1,108 +1,69 @@
 <div class="search-backdrop" (click)="onBackdropClick($event)">
-  <div class="search-panel" role="dialog" aria-label="Search messages">
-    <!-- Input -->
+  <div class="search-panel" role="dialog" aria-modal="true" aria-label="Search Grid" cdkTrapFocus [cdkTrapFocusAutoCapture]="true">
     <div class="search-input-row">
       <mat-icon class="search-leading-icon">search</mat-icon>
-      <input
-        #searchInput
-        class="search-input"
-        type="text"
-        placeholder="Search messages…"
-        autocomplete="off"
-        spellcheck="false"
-        [ngModel]="query"
-        (ngModelChange)="onQueryChange($event)"
-      />
-      <mat-spinner *ngIf="isSearching && rows.length > 0" diameter="16" class="search-inline-spinner"></mat-spinner>
-      <button *ngIf="query" class="search-clear" (click)="clear()" aria-label="Clear">
-        <mat-icon>close</mat-icon>
-      </button>
-      <button class="search-close" (click)="close()" aria-label="Close search">
-        <span>Esc</span>
-      </button>
+      <input #searchInput class="search-input" type="text" placeholder="Search messages, conversations and people…"
+        autocomplete="off" spellcheck="false" aria-label="Search Grid" role="combobox" aria-autocomplete="list"
+        aria-controls="grid-search-results" [attr.aria-expanded]="entries.length > 0"
+        [attr.aria-activedescendant]="activeIndex >= 0 && entries[activeIndex] ? 'grid-search-' + entries[activeIndex].id : null"
+        [ngModel]="query" (ngModelChange)="onQueryChange($event)" />
+      <button *ngIf="query" class="search-clear" (click)="clear()" aria-label="Clear search"><mat-icon>close</mat-icon></button>
+      <button class="search-close" (click)="close()" aria-label="Close search"><span>Esc</span></button>
     </div>
-
-    <!-- Scope -->
-    <div class="search-scope" *ngIf="currentChannel">
-      <span class="scope-label">Search in</span>
-      <button class="scope-chip" [class.active]="scope === 'all'" (click)="setScope('all')">
-        All channels
-      </button>
-      <button class="scope-chip" [class.active]="scope === 'channel'" (click)="setScope('channel')">
-        <mat-icon *ngIf="!isDmChannel(currentChannel)">tag</mat-icon>
-        <mat-icon *ngIf="isDmChannel(currentChannel)">person</mat-icon>
+    <div class="search-filters" aria-label="Result types">
+      <button *ngFor="let filter of filters" class="scope-chip" [class.active]="kind === filter.kind"
+        [attr.aria-pressed]="kind === filter.kind" (click)="setKind(filter.kind)">{{ filter.label }}</button>
+    </div>
+    <div class="search-scope" *ngIf="currentChannel && (kind === 'all' || kind === 'message')">
+      <span class="scope-label">Messages in</span>
+      <button class="scope-chip" [class.active]="scope === 'all'" [attr.aria-pressed]="scope === 'all'" (click)="setScope('all')">All conversations</button>
+      <button class="scope-chip" [class.active]="scope === 'channel'" [attr.aria-pressed]="scope === 'channel'" (click)="setScope('channel')">
         <span>{{ currentChannelLabel() }}</span>
       </button>
     </div>
-
-    <!-- Body -->
     <div class="search-body" #resultsBody>
-      <!-- Full-body spinner only when there is nothing to keep on screen;
-           otherwise the previous results stay visible (dimmed) while the new
-           query runs, so typing never blanks the list. -->
-      <div class="search-status" *ngIf="isSearching && rows.length === 0">
-        <mat-spinner diameter="20"></mat-spinner>
-        <span>Searching…</span>
-      </div>
-
-      <div class="search-hint" *ngIf="!isSearching && !hasSearched">
+      <div class="search-hint" *ngIf="!hasSearched">
         <mat-icon>search</mat-icon>
-        <div class="search-hint-text">
-          <span>Type at least 2 characters to search messages across your channels.</span>
-          <span class="search-hint-sub">Use "quotes" for an exact phrase. Results open on the message itself.</span>
-        </div>
+        <div class="search-hint-text"><span>Find a conversation, a person, or something someone said.</span>
+          <span class="search-hint-sub">Type at least 2 characters. Use quotes to find an exact phrase in messages.</span></div>
       </div>
-
-      <div class="search-empty" *ngIf="!isSearching && hasSearched && rows.length === 0">
-        <mat-icon>search_off</mat-icon>
-        <span>
-          No messages found for “{{ query }}”<ng-container *ngIf="scope === 'channel'"> in {{ currentChannelLabel() }}</ng-container>.
-        </span>
+      <div class="search-status" *ngIf="isSearching" role="status"><mat-spinner diameter="18"></mat-spinner><span>Searching Grid…</span></div>
+      <div class="search-error" *ngIf="searchError" role="alert">{{ searchError }} <button (click)="onQueryChange(query)">Retry</button></div>
+      <div class="search-empty" *ngIf="!isSearching && hasSearched && entries.length === 0 && !searchError">
+        <mat-icon>search_off</mat-icon><span>No results for “{{ query }}”.</span>
       </div>
-
-      <ul class="search-results" *ngIf="rows.length > 0" [class.stale]="isSearching" role="listbox">
-        <li
-          *ngFor="let row of rows; let i = index; trackBy: trackByRowId"
-          class="search-result"
-          role="option"
-          [class.active]="i === activeIndex"
-          [attr.aria-selected]="i === activeIndex"
-          (click)="selectRow(row)"
-          (mouseenter)="activeIndex = i"
-        >
-          <div class="result-meta">
-            <span class="result-sender">{{ row.sender }}</span>
-            <span class="result-channel" *ngIf="row.channel">{{ row.channel }}</span>
-            <span class="result-thread" *ngIf="row.isReply">
-              <mat-icon>forum</mat-icon>in thread
-            </span>
-            <span class="result-time">{{ row.time }}</span>
-          </div>
-          <div class="result-snippet">
-            <ng-container *ngFor="let part of row.parts">
-              <mark *ngIf="part.match">{{ part.text }}</mark>
-              <span *ngIf="!part.match">{{ part.text }}</span>
+      <ul class="search-results" id="grid-search-results" role="listbox" aria-label="Search results">
+        <li *ngFor="let entry of entries; let i = index; trackBy: trackByEntry" role="presentation">
+          <h3 class="result-section" *ngIf="i === 0 || entries[i - 1].kind !== entry.kind">{{ groupLabel(entry.kind) }}</h3>
+          <div class="search-result" role="option" [id]="'grid-search-' + entry.id"
+            [class.active]="i === activeIndex" [class.stale]="entry.kind === 'message' && (isSearching || isPaging)"
+            [attr.aria-selected]="i === activeIndex" [attr.aria-disabled]="entry.kind === 'message' && (isSearching || isPaging)"
+            (click)="selectEntry(entry)" (mouseenter)="activeIndex = i">
+            <div class="entity-result" *ngIf="entry.kind !== 'message'">
+              <mat-icon>{{ entry.kind === 'person' ? 'person_outline' : entry.channel?.channel_type === 'group' ? 'group' : entry.channel && isDmChannel(entry.channel) ? 'chat_bubble_outline' : 'tag' }}</mat-icon>
+              <div><span class="entity-name">{{ entry.label }}</span><span class="entity-detail">{{ entry.detail }}</span></div>
+              <mat-icon class="entity-open">arrow_forward</mat-icon>
+            </div>
+            <ng-container *ngIf="entry.message as row">
+              <div class="result-meta"><span class="result-sender">{{ row.sender }}</span><span class="result-channel">{{ row.channel }}</span>
+                <span class="result-thread" *ngIf="row.isReply"><mat-icon>forum</mat-icon>in thread</span><span class="result-time">{{ row.time }}</span></div>
+              <div class="result-snippet"><ng-container *ngFor="let part of row.parts"><mark *ngIf="part.match">{{ part.text }}</mark><span *ngIf="!part.match">{{ part.text }}</span></ng-container></div>
             </ng-container>
           </div>
         </li>
       </ul>
-
-      <div class="search-footer" *ngIf="!isSearching && (rows.length > 0 || page > 0)">
+      <div class="more-entities" *ngIf="kind === 'all' && scope === 'all'">
+        <button *ngIf="matchingChannels.length > 5" (click)="setKind('channel')">Show more conversations</button>
+        <button *ngIf="matchingPeople.length > 5" (click)="setKind('person')">Show more people</button>
+      </div>
+      <div class="search-footer" *ngIf="!isSearching && (kind === 'all' || kind === 'message') && (rows.length > 0 || page > 0)">
         <div class="pager">
-          <button class="pager-btn" (click)="prevPage()" [disabled]="!canGoPrev" aria-label="Previous page">
-            <mat-icon>chevron_left</mat-icon>
-          </button>
-          <span class="result-count">
-            <ng-container *ngIf="rows.length > 0">Results {{ pageStart }}–{{ pageEnd }}</ng-container>
-            <ng-container *ngIf="rows.length === 0">No more results</ng-container>
-            <span class="page-number">· Page {{ page + 1 }}</span>
-            <mat-spinner *ngIf="isPaging" diameter="14" class="pager-spinner"></mat-spinner>
-          </span>
-          <button class="pager-btn" (click)="nextPage()" [disabled]="!canGoNext" aria-label="Next page">
-            <mat-icon>chevron_right</mat-icon>
-          </button>
+          <button class="pager-btn" (click)="prevPage()" [disabled]="!canGoPrev" aria-label="Previous message page"><mat-icon>chevron_left</mat-icon></button>
+          <span class="result-count">{{ rows.length ? "Messages " + pageStart + "–" + pageEnd : "No more messages" }} <span class="page-number">· Page {{ page + 1 }}</span></span>
+          <mat-spinner *ngIf="isPaging" diameter="14"></mat-spinner>
+          <button class="pager-btn" (click)="nextPage()" [disabled]="!canGoNext" aria-label="Next message page"><mat-icon>chevron_right</mat-icon></button>
         </div>
-        <span class="result-hint">↑↓ move · Enter open · ⌥←/→ page</span>
+        <span class="result-hint">↑↓ move · Enter open</span>
       </div>
     </div>
   </div>
