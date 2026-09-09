@@ -1,8 +1,7 @@
-import { Component, ViewChild, ElementRef, OnInit, OnDestroy } from '@angular/core';
+import { Component, ViewChild, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { AngularFireAuth } from '@angular/fire/compat/auth';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
@@ -36,16 +35,15 @@ function darken(hex: string, amount: number): string {
 @Component({
   selector: 'app-grid-shell',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule, MatMenuModule, MatTooltipModule, MatDividerModule, GridComponent],
+  imports: [CommonModule, MatIconModule, MatButtonModule, MatMenuModule, MatTooltipModule, MatDividerModule, GridComponent],
   template: `
     <div class="grid-shell">
       <div class="title-bar" [style.background]="titleBarBg">
         <div class="title-bar-spacer"></div>
-        <button type="button" class="title-bar-search" (click)="gridRef.openSearch()" aria-label="Search Grid">
-          <mat-icon>search</mat-icon>
-          <span>Search messages, conversations and people</span>
-        </button>
         <div class="title-bar-actions">
+          <button mat-icon-button type="button" class="search-btn" (click)="gridRef.openSearch()" aria-label="Search Grid" matTooltip="Search Grid (⌘K / Ctrl+K)">
+            <mat-icon>search</mat-icon>
+          </button>
           <button mat-icon-button [matMenuTriggerFor]="userMenu" class="profile-btn" matTooltip="Account">
             <mat-icon>account_circle</mat-icon>
           </button>
@@ -93,44 +91,6 @@ function darken(hex: string, amount: number): string {
       width: 70px;
     }
 
-    .title-bar-search {
-      display: flex;
-      align-items: center;
-      flex: 1;
-      max-width: 400px;
-      height: 26px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      padding: 0 8px;
-      gap: 6px;
-      -webkit-app-region: no-drag;
-      cursor: pointer;
-      color: rgba(255,255,255,0.9);
-      font: inherit;
-      font-size: 13px;
-
-      mat-icon {
-        font-size: 16px;
-        width: 16px;
-        height: 16px;
-        color: rgba(255, 255, 255, 0.4);
-      }
-
-      span {
-        flex: 1;
-        background: none;
-        border: none;
-        outline: none;
-        color: rgba(255, 255, 255, 0.9);
-        font-size: 13px;
-        font-family: inherit;
-
-        &::placeholder {
-          color: rgba(255, 255, 255, 0.4);
-        }
-      }
-    }
-
     .title-bar-actions {
       display: flex;
       align-items: center;
@@ -138,6 +98,7 @@ function darken(hex: string, amount: number): string {
       -webkit-app-region: no-drag;
     }
 
+    .search-btn.mat-mdc-icon-button,
     .profile-btn.mat-mdc-icon-button {
       color: rgba(255, 255, 255, 0.6);
       width: 32px;
@@ -147,6 +108,11 @@ function darken(hex: string, amount: number): string {
       align-items: center;
       justify-content: center;
       transition: color 0.15s;
+
+      &:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: -2px;
+      }
 
       &:hover {
         color: rgba(255, 255, 255, 1);
