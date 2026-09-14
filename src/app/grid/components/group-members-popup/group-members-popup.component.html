@@ -7,238 +7,244 @@
     </button>
   </div>
 
-  <!-- Group Name (creator/owner only) -->
-  <div class="group-name-section" *ngIf="isOwner()">
-    <ng-container *ngIf="!isEditingName">
-      <span class="group-name-label">Name</span>
-      <span class="group-name-value">{{ channelName || 'Unnamed group' }}</span>
-      <button
-        mat-icon-button
-        class="rename-button"
-        (click)="startRename()"
-        matTooltip="Rename group"
-      >
-        <mat-icon>edit</mat-icon>
-      </button>
-    </ng-container>
-
-    <ng-container *ngIf="isEditingName">
-      <input
-        type="text"
-        class="group-name-input"
-        [(ngModel)]="editableName"
-        maxlength="100"
-        placeholder="Group name"
-        (keydown.enter)="saveRename()"
-        (keydown.escape)="cancelRename()"
-      />
-      <button
-        mat-icon-button
-        class="rename-save"
-        [disabled]="isRenaming || !editableName.trim()"
-        (click)="saveRename()"
-        matTooltip="Save"
-      >
-        <mat-icon>{{ isRenaming ? 'sync' : 'check' }}</mat-icon>
-      </button>
-      <button
-        mat-icon-button
-        class="rename-cancel"
-        [disabled]="isRenaming"
-        (click)="cancelRename()"
-        matTooltip="Cancel"
-      >
-        <mat-icon>close</mat-icon>
-      </button>
-    </ng-container>
-  </div>
-
-  <!-- Loading State -->
-  <div class="loading-state" *ngIf="isLoading">
-    <mat-icon class="spinning">sync</mat-icon>
-    <span>Loading members...</span>
-  </div>
-
-  <!-- Members List -->
-  <div class="members-list" *ngIf="!isLoading">
-    <div class="member-item" *ngFor="let member of members">
-      <!-- Avatar -->
-      <div class="member-avatar">
-        <img *ngIf="getMemberAvatarUrl(member)" [src]="getMemberAvatarUrl(member)" alt="">
-        <span *ngIf="!getMemberAvatarUrl(member)" class="avatar-placeholder">
-          {{ getMemberInitials(member) }}
-        </span>
-      </div>
-
-      <!-- Member Info -->
-      <div class="member-info">
-        <span class="member-name">
-          {{ getMemberDisplayName(member) }}
-          <span *ngIf="member.user_id === currentUserId" class="you-badge">(you)</span>
-        </span>
-        <span
-          class="member-role"
-          *ngIf="!canManageRole(member)"
-          [ngClass]="getRoleBadgeClass(member.role)"
-        >
-          {{ member.role }}
-        </span>
-      </div>
-
-      <div class="member-access-controls">
-        <div class="role-management" *ngIf="canManageRole(member)">
-          <select
-            [ngModel]="member.role"
-            (ngModelChange)="onMemberRoleChange(member, $event)"
-            [disabled]="isUpdatingRole(member) || !!transferringOwnershipTo"
-            [attr.aria-label]="'Group role for ' + getMemberDisplayName(member)"
-          >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </select>
-          <mat-icon *ngIf="isUpdatingRole(member)" class="role-spinner spinning">sync</mat-icon>
-        </div>
-
-        <div class="posting-permission-control" *ngIf="canManagePostingPermission(member); else permissionLabel">
-          <select
-            [ngModel]="member.posting_permission || 'can_post'"
-            (ngModelChange)="onPostingPermissionChange(member, $event)"
-            [disabled]="isUpdatingPostingPermission(member)"
-            [attr.aria-label]="'Posting permission for ' + getMemberDisplayName(member)"
-          >
-            <option value="can_post">Can post</option>
-            <option value="read_only">Read-only</option>
-          </select>
-          <mat-icon *ngIf="isUpdatingPostingPermission(member)" class="permission-spinner spinning">sync</mat-icon>
-        </div>
-        <ng-template #permissionLabel>
-          <span
-            class="posting-permission-badge"
-            *ngIf="member.role !== 'owner'"
-            [class.read-only]="member.posting_permission === 'read_only'"
-          >
-            <mat-icon>{{ member.posting_permission === 'read_only' ? 'visibility' : 'edit' }}</mat-icon>
-            {{ getPostingPermissionLabel(member) }}
-          </span>
-        </ng-template>
-      </div>
-
-      <!-- Rare / destructive actions -->
-      <div class="member-actions">
+  <!-- Scrollable body: everything below the header scrolls as one region -->
+  <div class="popup-body" #popupBody>
+    <!-- Group Name (creator/owner only) -->
+    <div class="group-name-section" *ngIf="isOwner()">
+      <ng-container *ngIf="!isEditingName">
+        <span class="group-name-label">Name</span>
+        <span class="group-name-value">{{ channelName || 'Unnamed group' }}</span>
         <button
-          *ngIf="canManageRole(member)"
           mat-icon-button
-          class="transfer-owner-button"
-          [disabled]="!!transferringOwnershipTo"
-          (click)="transferOwnership(member)"
-          [matTooltip]="'Transfer ownership to ' + getMemberDisplayName(member)"
-          [attr.aria-label]="'Transfer ownership to ' + getMemberDisplayName(member)"
+          class="rename-button"
+          (click)="startRename()"
+          matTooltip="Rename group"
         >
-          <mat-icon>{{ transferringOwnershipTo === member.user_id ? 'sync' : 'swap_horiz' }}</mat-icon>
+          <mat-icon>edit</mat-icon>
+        </button>
+      </ng-container>
+
+      <ng-container *ngIf="isEditingName">
+        <input
+          type="text"
+          class="group-name-input"
+          [(ngModel)]="editableName"
+          maxlength="100"
+          placeholder="Group name"
+          (keydown.enter)="saveRename()"
+          (keydown.escape)="cancelRename()"
+        />
+        <button
+          mat-icon-button
+          class="rename-save"
+          [disabled]="isRenaming || !editableName.trim()"
+          (click)="saveRename()"
+          matTooltip="Save"
+        >
+          <mat-icon>{{ isRenaming ? 'sync' : 'check' }}</mat-icon>
         </button>
         <button
-          *ngIf="canRemoveMember(member)"
           mat-icon-button
-          class="remove-button"
-          (click)="removeMember(member)"
-          matTooltip="Remove from group"
-          [attr.aria-label]="'Remove ' + getMemberDisplayName(member) + ' from group'"
+          class="rename-cancel"
+          [disabled]="isRenaming"
+          (click)="cancelRename()"
+          matTooltip="Cancel"
         >
           <mat-icon>close</mat-icon>
         </button>
-      </div>
+      </ng-container>
     </div>
-  </div>
 
-  <!-- Reply-Only Toggle (Owner Only) -->
-  <div class="reply-only-section" *ngIf="isOwner()">
-    <div class="reply-only-toggle" (click)="onToggleReplyOnly()">
-      <mat-icon>{{ isReplyOnly ? 'lock' : 'lock_open' }}</mat-icon>
-      <span>Reply only</span>
-      <div class="toggle-switch" [class.active]="isReplyOnly">
-        <div class="toggle-knob"></div>
-      </div>
+    <!-- Loading State -->
+    <div class="loading-state" *ngIf="isLoading">
+      <mat-icon class="spinning">sync</mat-icon>
+      <span>Loading members...</span>
     </div>
-    <span class="reply-only-description">When enabled, only you can post new messages. Others can reply in threads.</span>
-  </div>
 
-  <!-- Add Members Section -->
-  <div class="add-members-section" *ngIf="canAddMembers()">
-    <button
-      class="add-members-toggle"
-      (click)="toggleAddMembers()"
-      [class.expanded]="isAddingMembers"
-    >
-      <mat-icon>{{ isAddingMembers ? 'expand_less' : 'person_add' }}</mat-icon>
-      <span>{{ isAddingMembers ? 'Cancel' : 'Add Members' }}</span>
-    </button>
-
-    <!-- Expandable Add Members Panel -->
-    <div class="add-members-panel" *ngIf="isAddingMembers">
-      <!-- Search Input -->
-      <div class="search-input-container">
-        <mat-icon class="search-icon">search</mat-icon>
-        <input
-          type="text"
-          [(ngModel)]="searchQuery"
-          placeholder="Search users..."
-          class="search-input"
-        >
-      </div>
-
-      <!-- Selected Count -->
-      <div class="selected-count" *ngIf="selectedUserIds.size > 0">
-        {{ selectedUserIds.size }} user{{ selectedUserIds.size === 1 ? '' : 's' }} selected
-      </div>
-
-      <!-- User List -->
-      <div class="user-list">
-        <div
-          class="user-item"
-          *ngFor="let user of filteredUsersForAdd"
-          (click)="toggleUserSelection(user.id!)"
-          [class.selected]="isUserSelected(user.id!)"
-        >
-          <div class="user-avatar" [style.background]="user.avatarColor || '#1d1c1d'">
-            <img *ngIf="user.profileImage" [src]="user.profileImage" [alt]="getUserDisplayName(user)" class="user-avatar-img">
-            <span *ngIf="!user.profileImage">{{ getUserInitials(user) }}</span>
-          </div>
-          <div class="user-info">
-            <span class="user-name">{{ getUserDisplayName(user) }}</span>
-            <span class="user-role">{{ user.sRole }}</span>
-          </div>
-          <mat-icon class="check-icon" *ngIf="isUserSelected(user.id!)">check_circle</mat-icon>
+    <!-- Members List -->
+    <div class="members-list" *ngIf="!isLoading">
+      <div class="member-item" *ngFor="let member of members">
+        <!-- Avatar -->
+        <div class="member-avatar">
+          <img *ngIf="getMemberAvatarUrl(member)" [src]="getMemberAvatarUrl(member)" alt="">
+          <span *ngIf="!getMemberAvatarUrl(member)" class="avatar-placeholder">
+            {{ getMemberInitials(member) }}
+          </span>
         </div>
 
-        <div class="no-results" *ngIf="filteredUsersForAdd.length === 0">
-          <span *ngIf="searchQuery">No employees found</span>
-          <span *ngIf="!searchQuery && users.length > 0">All employees are already members</span>
-          <span *ngIf="!searchQuery && users.length === 0">Loading employees...</span>
+        <!-- Member Info -->
+        <div class="member-info">
+          <span class="member-name">
+            {{ getMemberDisplayName(member) }}
+            <span *ngIf="member.user_id === currentUserId" class="you-badge">(you)</span>
+          </span>
+          <span
+            class="member-role"
+            *ngIf="!canManageRole(member)"
+            [ngClass]="getRoleBadgeClass(member.role)"
+          >
+            {{ member.role }}
+          </span>
+        </div>
+
+        <div class="member-access-controls">
+          <div class="role-management" *ngIf="canManageRole(member)">
+            <select
+              [ngModel]="member.role"
+              (ngModelChange)="onMemberRoleChange(member, $event)"
+              [disabled]="isUpdatingRole(member) || !!transferringOwnershipTo"
+              [attr.aria-label]="'Group role for ' + getMemberDisplayName(member)"
+            >
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+            </select>
+            <mat-icon *ngIf="isUpdatingRole(member)" class="role-spinner spinning">sync</mat-icon>
+          </div>
+
+          <div class="posting-permission-control" *ngIf="canManagePostingPermission(member); else permissionLabel">
+            <select
+              [ngModel]="member.posting_permission || 'can_post'"
+              (ngModelChange)="onPostingPermissionChange(member, $event)"
+              [disabled]="isUpdatingPostingPermission(member)"
+              [attr.aria-label]="'Posting permission for ' + getMemberDisplayName(member)"
+            >
+              <option value="can_post">Can post</option>
+              <option value="read_only">Read-only</option>
+            </select>
+            <mat-icon *ngIf="isUpdatingPostingPermission(member)" class="permission-spinner spinning">sync</mat-icon>
+          </div>
+          <ng-template #permissionLabel>
+            <span
+              class="posting-permission-badge"
+              *ngIf="member.role !== 'owner'"
+              [class.read-only]="member.posting_permission === 'read_only'"
+            >
+              <mat-icon>{{ member.posting_permission === 'read_only' ? 'visibility' : 'edit' }}</mat-icon>
+              {{ getPostingPermissionLabel(member) }}
+            </span>
+          </ng-template>
+        </div>
+
+        <!-- Rare / destructive actions -->
+        <div class="member-actions">
+          <button
+            *ngIf="canManageRole(member)"
+            mat-icon-button
+            class="transfer-owner-button"
+            [disabled]="!!transferringOwnershipTo"
+            (click)="transferOwnership(member)"
+            [matTooltip]="'Transfer ownership to ' + getMemberDisplayName(member)"
+            [attr.aria-label]="'Transfer ownership to ' + getMemberDisplayName(member)"
+          >
+            <mat-icon>{{ transferringOwnershipTo === member.user_id ? 'sync' : 'swap_horiz' }}</mat-icon>
+          </button>
+          <button
+            *ngIf="canRemoveMember(member)"
+            mat-icon-button
+            class="remove-button"
+            (click)="removeMember(member)"
+            matTooltip="Remove from group"
+            [attr.aria-label]="'Remove ' + getMemberDisplayName(member) + ' from group'"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
         </div>
       </div>
+    </div>
 
-      <!-- Add Button -->
+    <!-- Reply-Only Toggle (Owner Only) -->
+    <div class="reply-only-section" *ngIf="isOwner()">
+      <div class="reply-only-toggle" (click)="onToggleReplyOnly()">
+        <mat-icon>{{ isReplyOnly ? 'lock' : 'lock_open' }}</mat-icon>
+        <span>Reply only</span>
+        <div class="toggle-switch" [class.active]="isReplyOnly">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+      <span class="reply-only-description">When enabled, only you can post new messages. Others can reply in threads.</span>
+    </div>
+
+    <!-- Add Members Section -->
+    <div class="add-members-section" *ngIf="canAddMembers()" #addMembersSection>
       <button
-        class="add-button"
-        [disabled]="selectedUserIds.size === 0 || isSubmitting"
-        (click)="addSelectedMembers()"
+        class="add-members-toggle"
+        (click)="toggleAddMembers()"
+        [class.expanded]="isAddingMembers"
       >
-        <mat-icon *ngIf="isSubmitting" class="spinning">sync</mat-icon>
-        <span *ngIf="!isSubmitting">Add {{ selectedUserIds.size }} Member{{ selectedUserIds.size === 1 ? '' : 's' }}</span>
-        <span *ngIf="isSubmitting">Adding...</span>
+        <mat-icon>{{ isAddingMembers ? 'expand_less' : 'person_add' }}</mat-icon>
+        <span>{{ isAddingMembers ? 'Cancel' : 'Add Members' }}</span>
+      </button>
+
+      <!-- Expandable Add Members Panel -->
+      <div class="add-members-panel" *ngIf="isAddingMembers">
+        <!-- Search Input -->
+        <div class="search-input-container">
+          <mat-icon class="search-icon">search</mat-icon>
+          <input
+            #addSearchInput
+            type="text"
+            [(ngModel)]="searchQuery"
+            placeholder="Search users..."
+            class="search-input"
+          >
+        </div>
+
+        <!-- Selected Count -->
+        <div class="selected-count" *ngIf="selectedUserIds.size > 0">
+          {{ selectedUserIds.size }} user{{ selectedUserIds.size === 1 ? '' : 's' }} selected
+        </div>
+
+        <!-- User List -->
+        <div class="user-list">
+          <div
+            class="user-item"
+            *ngFor="let user of filteredUsersForAdd"
+            (click)="toggleUserSelection(user.id!)"
+            [class.selected]="isUserSelected(user.id!)"
+          >
+            <div class="user-avatar" [style.background]="user.avatarColor || '#1d1c1d'">
+              <img *ngIf="user.profileImage" [src]="user.profileImage" [alt]="getUserDisplayName(user)" class="user-avatar-img">
+              <span *ngIf="!user.profileImage">{{ getUserInitials(user) }}</span>
+            </div>
+            <div class="user-info">
+              <span class="user-name">{{ getUserDisplayName(user) }}</span>
+              <span class="user-role">{{ user.sRole }}</span>
+            </div>
+            <mat-icon class="check-icon" *ngIf="isUserSelected(user.id!)">check_circle</mat-icon>
+          </div>
+
+          <div class="no-results" *ngIf="filteredUsersForAdd.length === 0">
+            <span *ngIf="searchQuery">No employees found</span>
+            <span *ngIf="!searchQuery && users.length > 0">All employees are already members</span>
+            <span *ngIf="!searchQuery && users.length === 0">Loading employees...</span>
+          </div>
+        </div>
+
+        <!-- Add Button (sticky, so it stays reachable however long the list is) -->
+        <div class="add-button-bar">
+          <button
+            class="add-button"
+            [disabled]="selectedUserIds.size === 0 || isSubmitting"
+            (click)="addSelectedMembers()"
+          >
+            <mat-icon *ngIf="isSubmitting" class="spinning">sync</mat-icon>
+            <span *ngIf="!isSubmitting">Add {{ selectedUserIds.size }} Member{{ selectedUserIds.size === 1 ? '' : 's' }}</span>
+            <span *ngIf="isSubmitting">Adding...</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Group (creator/owner only) -->
+    <div class="delete-group-section" *ngIf="isOwner()">
+      <button
+        class="delete-group-button"
+        [disabled]="isDeleting"
+        (click)="confirmDelete()"
+      >
+        <mat-icon class="delete-group-icon" [class.spinning]="isDeleting">{{ isDeleting ? 'sync' : 'delete_outline' }}</mat-icon>
+        <span>{{ isDeleting ? 'Deleting...' : 'Delete group' }}</span>
       </button>
     </div>
-  </div>
-
-  <!-- Delete Group (creator/owner only) -->
-  <div class="delete-group-section" *ngIf="isOwner()">
-    <button
-      class="delete-group-button"
-      [disabled]="isDeleting"
-      (click)="confirmDelete()"
-    >
-      <mat-icon class="delete-group-icon" [class.spinning]="isDeleting">{{ isDeleting ? 'sync' : 'delete_outline' }}</mat-icon>
-      <span>{{ isDeleting ? 'Deleting...' : 'Delete group' }}</span>
-    </button>
   </div>
 </div>

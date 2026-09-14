@@ -6,6 +6,8 @@ import {
   OnInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
+  ViewChild,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -46,6 +48,10 @@ export class GroupMembersPopupComponent implements OnInit {
   @Output() groupDeleted = new EventEmitter<void>();
   @Output() postingPermissionsChanged = new EventEmitter<void>();
   @Output() ownershipTransferred = new EventEmitter<string>();
+
+  @ViewChild('popupBody') popupBody?: ElementRef<HTMLElement>;
+  @ViewChild('addMembersSection') addMembersSection?: ElementRef<HTMLElement>;
+  @ViewChild('addSearchInput') addSearchInput?: ElementRef<HTMLInputElement>;
 
   members: GridChannelMember[] = [];
   isLoading = true;
@@ -334,6 +340,27 @@ export class GroupMembersPopupComponent implements OnInit {
       this.selectedUserIds.clear();
     }
     this.cdr.markForCheck();
+    if (this.isAddingMembers) {
+      // The panel renders on the next change-detection pass; then bring it to
+      // the top of the scroll region so search, results and the Add button are
+      // all on screen at once.
+      setTimeout(() => this.revealAddMembersPanel());
+    }
+  }
+
+  /**
+   * Scroll the popup body so the add-members section starts at the top.
+   * Scrolls the body element directly rather than scrollIntoView(), which
+   * would also try to scroll the page underneath this fixed-position popup.
+   */
+  private revealAddMembersPanel(): void {
+    const body = this.popupBody?.nativeElement;
+    const section = this.addMembersSection?.nativeElement;
+    if (body && section) {
+      const top = section.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
+      body.scrollTo({ top, behavior: 'smooth' });
+    }
+    this.addSearchInput?.nativeElement.focus({ preventScroll: true });
   }
 
   /**
