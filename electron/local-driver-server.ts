@@ -257,7 +257,7 @@ function startJob(payload: any): Job {
 // project "my-ocsolar-portal") — listing the bare project name without the
 // "my-" prefix silently broke CORS for every PM on the hosted portal, which
 // the panel surfaced as "desktop app not found".
-const ALLOWED_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|ocsolarprocess\.com|my-ocsolar-portal\.web\.app|my-ocsolar-portal\.firebaseapp\.com)(:\d+)?$/;
+const ALLOWED_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|ocsolarprocess\.com|portal\.ocsolar\.com|my-ocsolar-portal\.web\.app|my-ocsolar-portal\.firebaseapp\.com)(:\d+)?$/;
 function applyCors(req: http.IncomingMessage, res: http.ServerResponse) {
   const origin = req.headers.origin;
   if (typeof origin === "string" && ALLOWED_ORIGIN_RE.test(origin)) {
