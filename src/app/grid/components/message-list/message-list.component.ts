@@ -112,6 +112,16 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   private static readonly HIGHLIGHT_MS = 2500;
   private highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /**
+   * Rendered HTML per message body. [innerHTML] compares the bound value by
+   * identity, and bypassSecurityTrustHtml() minted a fresh wrapper on every
+   * change-detection pass, so Angular rewrote the text nodes on every pass —
+   * including the click that follows a drag-select, which is why a selection
+   * vanished the instant the mouse was released. Returning the same wrapper for
+   * the same body leaves the DOM (and the selection) alone.
+   */
+  private formattedContentCache = new Map<string, SafeHtml>();
+
   constructor(
     private sanitizer: DomSanitizer,
     public fileUploadService: GridFileUploadService
@@ -165,6 +175,10 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // Mention display names come from userMap, so a new map means a re-render.
+    if (changes['userMap']) {
+      this.formattedContentCache.clear();
+    }
     // A jump request lands somewhere in history: from now until the message
     // is on screen, none of the "stick to the bottom" rules may fire.
     if (changes['highlightRequest'] && this.highlightRequest) {
@@ -509,6 +523,8 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
    */
   formatMessageContent(content: string): SafeHtml {
     if (!content) return this.sanitizer.bypassSecurityTrustHtml('');
+    const cached = this.formattedContentCache.get(content);
+    if (cached) return cached;
 
     // Escape HTML to prevent XSS
     const escaped = this.escapeHtml(content);
@@ -546,7 +562,9 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       return `<a href="${href}" class="message-link" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>${suffix}`;
     });
 
-    return this.sanitizer.bypassSecurityTrustHtml(formatted);
+    const safe = this.sanitizer.bypassSecurityTrustHtml(formatted);
+    this.formattedContentCache.set(content, safe);
+    return safe;
   }
 
   /**

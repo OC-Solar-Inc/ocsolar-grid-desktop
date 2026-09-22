@@ -65,6 +65,16 @@ export class ThreadPanelComponent implements OnChanges, AfterViewChecked, OnDest
   mentionQuery = '';
   mentionMap = new Map<string, string>();
 
+  /**
+   * Rendered HTML per message body. [innerHTML] compares the bound value by
+   * identity, and bypassSecurityTrustHtml() minted a fresh wrapper on every
+   * change-detection pass, so Angular rewrote the text nodes on every pass —
+   * including the click that follows a drag-select, which is why a selection
+   * vanished the instant the mouse was released. Returning the same wrapper for
+   * the same body leaves the DOM (and the selection) alone.
+   */
+  private formattedContentCache = new Map<string, SafeHtml>();
+
   constructor(
     private sanitizer: DomSanitizer,
     private mentionService: GridMentionService,
@@ -72,6 +82,9 @@ export class ThreadPanelComponent implements OnChanges, AfterViewChecked, OnDest
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['userMap']) {
+      this.formattedContentCache.clear();
+    }
     if (changes['highlightRequest'] && this.highlightRequest) {
       this.pendingHighlightId = this.highlightRequest.messageId;
       this.highlightDeadline = Date.now() + ThreadPanelComponent.HIGHLIGHT_WAIT_MS;
@@ -401,6 +414,8 @@ export class ThreadPanelComponent implements OnChanges, AfterViewChecked, OnDest
    */
   formatMessageContent(content: string): SafeHtml {
     if (!content) return this.sanitizer.bypassSecurityTrustHtml('');
+    const cached = this.formattedContentCache.get(content);
+    if (cached) return cached;
 
     const escaped = this.escapeHtml(content);
     // Match escaped HTML entities: &lt;@userId&gt;
@@ -427,7 +442,9 @@ export class ThreadPanelComponent implements OnChanges, AfterViewChecked, OnDest
       return `<a href="${href}" class="message-link" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>${suffix}`;
     });
 
-    return this.sanitizer.bypassSecurityTrustHtml(formatted);
+    const safe = this.sanitizer.bypassSecurityTrustHtml(formatted);
+    this.formattedContentCache.set(content, safe);
+    return safe;
   }
 
   private escapeHtml(text: string): string {

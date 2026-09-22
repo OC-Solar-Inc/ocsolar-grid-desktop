@@ -286,4 +286,31 @@ describe('MessageListComponent', () => {
       expect(emitted).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ---------- Rendered-HTML identity (text selection survives change detection) ----------
+
+  describe('formatMessageContent caching', () => {
+    it('returns the identical SafeHtml for the same body across passes, so [innerHTML] leaves the DOM alone', () => {
+      const first = component.formatMessageContent('hello <@u1> https://example.com');
+      const second = component.formatMessageContent('hello <@u1> https://example.com');
+      expect(second).toBe(first);
+    });
+
+    it('a different body gets its own wrapper', () => {
+      expect(component.formatMessageContent('a')).not.toBe(component.formatMessageContent('b'));
+    });
+
+    it('a new userMap re-renders mentions instead of serving the stale name', () => {
+      const before = html('hi <@u1>');
+      expect(before).toContain('@u1');
+      const userMap = new Map<string, User>();
+      userMap.set('u1', {
+        sFirstName: 'Alice', sLastName: 'Smith', sFullName: 'Alice Smith', sRole: 'Admin',
+        sEmail: 'alice@oc.com', sPhone: '', sUID: 'u1', dtCreated: new Date(), sCreatedBy: '',
+      });
+      component.userMap = userMap;
+      component.ngOnChanges({ userMap: new SimpleChange(new Map(), userMap, false) });
+      expect(html('hi <@u1>')).toContain('@Alice Smith');
+    });
+  });
 });
