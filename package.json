@@ -1,6 +1,6 @@
 {
   "name": "ocsolar-grid-desktop",
-  "version": "1.4.13",
+  "version": "1.4.14",
   "description": "OC Solar Grid Desktop - Standalone chat application",
   "main": "dist-electron/main.js",
   "scripts": {
