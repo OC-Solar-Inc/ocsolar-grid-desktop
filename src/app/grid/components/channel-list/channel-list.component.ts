@@ -538,15 +538,25 @@ export class ChannelListComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Get filtered list of users for DM selection
-   * Only shows internal users (excludes customers and current user)
+   * Internal users who can be picked as a DM or group recipient.
+   *
+   * The users collection holds leftover documents for people who were
+   * onboarded twice (a 2025 crew import under @ocsolarinc.com, then a real
+   * @ocsolar.com account). Those leftovers are disabled (`active: false`) but
+   * were still rendered here, so the picker showed "Luis Rosas" twice.
+   * Disabled accounts are dropped, and any remaining docs that share an email
+   * collapse to the most complete one.
    */
-  get filteredUsers(): User[] {
+  private get selectableUsers(): User[] {
     const currentUserId = this.authProvider.getCurrentUserDocId();
 
-    let filtered = this.users.filter((user) => {
+    const eligible = this.users.filter((user) => {
       // Exclude current user (compare document IDs only)
       if (user.id === currentUserId) {
+        return false;
+      }
+      // Exclude disabled accounts
+      if (user.active === false) {
         return false;
       }
       // Exclude customers - only show internal users
@@ -556,6 +566,28 @@ export class ChannelListComponent implements OnInit, OnDestroy {
       }
       return true;
     });
+
+    const byEmail = new Map<string, User>();
+    const noEmail: User[] = [];
+    for (const user of eligible) {
+      const email = user.sEmail?.trim().toLowerCase();
+      if (!email) {
+        noEmail.push(user);
+        continue;
+      }
+      const existing = byEmail.get(email);
+      if (!existing || Object.keys(user).length > Object.keys(existing).length) {
+        byEmail.set(email, user);
+      }
+    }
+    return [...byEmail.values(), ...noEmail];
+  }
+
+  /**
+   * Get filtered list of users for DM selection
+   */
+  get filteredUsers(): User[] {
+    let filtered = this.selectableUsers;
 
     // Filter by search query
     if (this.dmSearchQuery.trim()) {
@@ -1017,20 +1049,7 @@ export class ChannelListComponent implements OnInit, OnDestroy {
    * Only shows internal users (excludes customers and current user)
    */
   get filteredUsersForGroup(): User[] {
-    const currentUserId = this.authProvider.getCurrentUserDocId();
-
-    let filtered = this.users.filter((user) => {
-      // Exclude current user
-      if (user.id === currentUserId) {
-        return false;
-      }
-      // Exclude customers - only show internal users
-      const userRoles = this.getUserRoles(user);
-      if (userRoles.includes('Customer')) {
-        return false;
-      }
-      return true;
-    });
+    let filtered = this.selectableUsers;
 
     // Filter by search query
     if (this.groupSearchQuery.trim()) {

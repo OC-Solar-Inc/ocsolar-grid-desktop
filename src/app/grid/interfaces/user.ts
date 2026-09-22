@@ -15,6 +15,7 @@ export interface User {
   profileImage?: string | null;
   avatarColor?: string;
   darkMode?: boolean;
+  active?: boolean; // Whether the account is enabled (undefined/true = active, false = disabled)
   /**
    * @deprecated Use sales_consultants collection instead. This field is only used to determine
    * if a user should be looked up in sales_consultants. The actual email is stored in
