@@ -1,3 +1,4 @@
+import { SimpleChange } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ThreadPanelComponent } from './thread-panel.component';
@@ -120,6 +121,28 @@ describe('ThreadPanelComponent', () => {
       const result = html('Hey <@u1> see https://example.com');
       expect(result).toContain('<span class="mention">@Bob</span>');
       expect(result).toContain('<a href="https://example.com"');
+    });
+  });
+
+  // ---------- Rendered-HTML identity (text selection survives change detection) ----------
+
+  describe('formatMessageContent caching', () => {
+    it('returns the identical SafeHtml for the same body across passes', () => {
+      const first = component.formatMessageContent('hello <@u1>');
+      expect(component.formatMessageContent('hello <@u1>')).toBe(first);
+    });
+
+    it('a new userMap re-renders mentions instead of serving the stale name', () => {
+      component.userMap = new Map();
+      expect(html('hi <@u1>')).toContain('@u1');
+      const userMap = new Map<string, User>();
+      userMap.set('u1', {
+        sFirstName: 'Alice', sLastName: 'Smith', sFullName: 'Alice Smith', sRole: 'Admin',
+        sEmail: 'alice@oc.com', sPhone: '', sUID: 'u1', dtCreated: new Date(), sCreatedBy: '',
+      });
+      component.userMap = userMap;
+      component.ngOnChanges({ userMap: new SimpleChange(new Map(), userMap, false) });
+      expect(html('hi <@u1>')).toContain('@Alice Smith');
     });
   });
 });
