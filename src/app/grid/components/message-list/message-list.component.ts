@@ -60,6 +60,19 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
   @Output() markUnreadRequested = new EventEmitter<GridMessage>();
   @Output() needsResponseToggled = new EventEmitter<GridMessage>();
 
+  @Output() tailVisible = new EventEmitter<void>();
+
+  isMessageVisible(messageId: string | undefined): boolean {
+    const element = this.scrollContainer?.nativeElement;
+    if (!messageId || !element || this.hasNewer || this.userHasScrolledUp) return false;
+    const row = Array.from(element.querySelectorAll<HTMLElement>('[data-message-id]'))
+      .find(item => item.dataset['messageId'] === messageId);
+    if (!row) return false;
+    const viewport = element.getBoundingClientRect();
+    const bounds = row.getBoundingClientRect();
+    return bounds.bottom <= viewport.bottom + 1 && bounds.bottom > viewport.top;
+  }
+
   @ViewChild('scrollContainer') scrollContainer!: ElementRef<HTMLDivElement>;
 
   // Inline edit state
@@ -409,6 +422,7 @@ export class MessageListComponent implements OnChanges, AfterViewInit, AfterView
       // User is at bottom - resume auto-scroll
       this.userHasScrolledUp = false;
       this.newMessagesWhileScrolledUp = 0;
+      this.tailVisible.emit();
     }
   }
 

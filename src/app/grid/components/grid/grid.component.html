@@ -150,6 +150,7 @@
         <!-- Messages List -->
         <lib-message-list
           [messages]="messages"
+          (tailVisible)="markLastMessageRead()"
           [isLoading]="isLoadingMessages"
           [hasMore]="hasMoreMessages"
           [typingUsers]="typingUsers"

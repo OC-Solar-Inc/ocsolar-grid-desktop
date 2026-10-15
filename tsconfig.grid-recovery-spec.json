@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.spec.json",
+  "include": [
+    "src/app/grid/components/grid/grid-delivery-recovery.spec.ts",
+    "src/app/grid/services/grid-websocket.service.spec.ts",
+    "src/**/*.d.ts"
+  ]
+}
