@@ -43,7 +43,7 @@ jobs:
           echo "CHROME_BIN=$CHROME_PATH" >> $GITHUB_ENV
 
       - name: Test Grid delivery recovery
-        run: npm run grid-recovery:typecheck && npm run grid-recovery:test
+        run: npm run grid-recovery:typecheck && npm run grid-recovery:test -- --browsers=ChromeHeadlessCI
 
       - name: Test
         run: npm run test:ci
