@@ -4,6 +4,8 @@
   "description": "OC Solar Grid Desktop - Standalone chat application",
   "main": "dist-electron/main.js",
   "scripts": {
+    "grid-recovery:typecheck": "tsc -p tsconfig.grid-recovery-spec.json --noEmit",
+    "grid-recovery:test": "ng test --watch=false --browsers=ChromeHeadless --ts-config=tsconfig.grid-recovery-spec.json --include='src/app/grid/components/grid/grid-delivery-recovery.spec.ts' --include='src/app/grid/services/grid-websocket.service.spec.ts'",
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",

@@ -1,7 +1,7 @@
 import { Input, Component, OnInit, OnDestroy, HostListener, HostBinding, ChangeDetectionStrategy, ChangeDetectorRef, ViewChild, Inject, Output, EventEmitter, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subject, Subscription, forkJoin } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { EMPTY, Subject, Subscription, forkJoin } from 'rxjs';
+import { takeUntil, expand, finalize, reduce } from 'rxjs/operators';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -14,6 +14,7 @@ import { UserPresenceService } from '../../services/user-presence.service';
 import { GRID_AUTH_PROVIDER, GRID_USER_DATA_PROVIDER, GridAuthProvider, GridUserDataProvider } from '../../tokens/grid-tokens';
 import {
   GridChannel,
+  GridCursorPaginatedResponse,
   GridHighlightRequest,
   GridJumpTarget,
   GridMessage,
@@ -56,6 +57,7 @@ export class GridComponent implements OnInit, OnDestroy {
   @Input() showSearchBar = true;
   // Reference to channel-list for accessing filteredUsers
   @ViewChild(ChannelListComponent) channelListRef!: ChannelListComponent;
+  @ViewChild(MessageListComponent) messageListRef?: MessageListComponent;
 
   // Theme - single dynamic class binding for performance
   @HostBinding('class') get themeClass(): string {
@@ -117,7 +119,6 @@ export class GridComponent implements OnInit, OnDestroy {
   // Connection state
   connectionState: GridWsConnectionState = 'disconnected';
   idleState: IdleState = 'active';
-  private previousIdleState: IdleState = 'active';
 
   // UI state
   isMobileView = false;
@@ -141,6 +142,7 @@ export class GridComponent implements OnInit, OnDestroy {
   @Output() sidenavToggle = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
+  private destroyed = false;
 
   // Track recently sent message hashes to detect duplicates from WebSocket echo
   private recentMessageHashes = new Set<string>();
@@ -148,6 +150,13 @@ export class GridComponent implements OnInit, OnDestroy {
   // In-flight message load; cancelled on channel switch so a slow response
   // from the previous channel can't overwrite the new channel's messages.
   private activeLoadMessages: Subscription | null = null;
+  private recoverySubscription = new Subscription();
+  private recoveryRequested = false;
+  private recovering = false;
+  private recoveryCursor: string | null = null;
+  private receivedMessageIds = new Set<string>();
+  private readTimer: ReturnType<typeof setTimeout> | null = null;
+
 
   // Cleanup function for Electron power state listener
   private removePowerListener: (() => void) | null = null;
@@ -238,12 +247,10 @@ export class GridComponent implements OnInit, OnDestroy {
   }
 
   private onNetworkOnline = (): void => {
-    if (!this.gridWs.isConnected()) {
-      console.log('Network online detected, forcing WebSocket reconnect');
-      this.ngZone.run(() => {
-        this.gridWs.forceReconnect();
-      });
-    }
+    this.ngZone.run(() => {
+      this.gridWs.forceReconnect();
+      this.recoverSelectedConversation();
+    });
   };
 
   retryConnection(): void {
@@ -251,10 +258,13 @@ export class GridComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     // Signal all subscriptions to complete
     this.destroy$.next();
     this.destroy$.complete();
     this.activeLoadMessages?.unsubscribe();
+    this.recoverySubscription.unsubscribe();
+    if (this.readTimer) clearTimeout(this.readTimer);
 
     // Cleanup power state and network listeners
     if (this.removePowerListener) {
@@ -361,12 +371,23 @@ export class GridComponent implements OnInit, OnDestroy {
     }
   }
 
+  @HostListener('window:focus')
+  onWindowFocus(): void {
+    this.recoverSelectedConversation();
+    this.refreshChannelData();
+  }
+
   private setupWebSocketSubscriptions(): void {
     // Connection state
     this.gridWs.connectionState$
       .pipe(takeUntil(this.destroy$))
       .subscribe((state) => {
+        const wasConnected = this.connectionState === 'connected';
         this.connectionState = state;
+        if (state === 'connected' && !wasConnected) {
+          this.recoverSelectedConversation();
+          this.refreshChannelData();
+        }
         this.cdr.markForCheck();
       });
 
@@ -375,100 +396,30 @@ export class GridComponent implements OnInit, OnDestroy {
     this.idleConnection.idleState$
       .pipe(takeUntil(this.destroy$))
       .subscribe((state) => {
-        const wasHidden = this.previousIdleState === 'hidden';
-        const isNowActive = state === 'active';
-
-        this.previousIdleState = this.idleState;
+        const wasHidden = this.idleState === 'hidden';
         this.idleState = state;
-
-        // When coming back from hidden tab, refresh channels to get latest unread counts
-        if (wasHidden && isNowActive) {
-          console.log('Grid: Tab became visible, refreshing channel data...');
+        if (wasHidden && state !== 'hidden') {
+          this.recoverSelectedConversation();
           this.refreshChannelData();
         }
 
         this.cdr.markForCheck();
       });
 
+    // Catch the REST/subscribe race: replay only after the server confirms
+    // the selected channel subscription, even on an already-open socket.
+    this.gridWs.channelJoined$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(channelId => {
+        if (channelId !== this.currentChannel?.id) return;
+        this.recoveryRequested = true;
+        this.runPendingRecovery();
+      });
+
     // New messages
     this.gridWs.newMessage$
       .pipe(takeUntil(this.destroy$))
-      .subscribe((message) => {
-        // Check if this is our own message coming back from the server
-        const isOwnMessage = message.user_id === this.currentUserId;
-        if (isOwnMessage && this.recentMessageHashes.has(this.getMessageHash(message))) {
-          // This is our own message broadcast back - replace optimistic message with real one.
-          // Replies live in threadReplies; top-level messages live in messages.
-          if (message.parent) {
-            const pendingIndex = this.threadReplies.findIndex(
-              (m) => m.pending && m.content === message.content && m.user_id === message.user_id
-            );
-            if (pendingIndex !== -1) {
-              this.threadReplies = this.threadReplies.map((m, i) =>
-                i === pendingIndex ? { ...message, pending: false } : m
-              );
-            }
-          } else {
-            const pendingIndex = this.messages.findIndex(
-              (m) => m.pending && m.content === message.content && m.user_id === message.user_id
-            );
-            if (pendingIndex !== -1) {
-              this.messages = this.messages.map((m, i) =>
-                i === pendingIndex ? { ...message, pending: false } : m
-              );
-            }
-          }
-          // Update channel info and return (don't add as new message)
-          this.updateChannelLastMessage(message);
-          this.cdr.markForCheck();
-          return;
-        }
-
-        if (this.currentChannel && message.channel === this.currentChannel.id) {
-          if (message.parent) {
-            // Reply: bump the parent's reply_count in the main feed and route
-            // to the open thread panel if it's showing this parent. Replies
-            // never go into this.messages — they belong in the thread panel.
-            this.messages = this.messages.map((m) =>
-              m.id === message.parent ? { ...m, reply_count: m.reply_count + 1 } : m
-            );
-            if (
-              this.threadParentMessage?.id === message.parent &&
-              !this.isMessageDuplicate(message, this.threadReplies)
-            ) {
-              this.threadReplies = [...this.threadReplies, message];
-            }
-          } else if (this.isLoadingMessages || this.hasNewerMessages) {
-            // Buffer messages during load to prevent race condition
-            // where WebSocket messages arrive before HTTP load completes,
-            // and while viewing history (the window doesn't reach the tail;
-            // the buffer is merged once the user gets back to the latest page)
-            if (!this.isMessageDuplicate(message, this.messageBuffer)) {
-              this.messageBuffer.push(message);
-              // Increment unread count to keep "New" divider in same position
-              if (this.unreadCountOnEntry > 0) {
-                this.unreadCountOnEntry++;
-              }
-            }
-          } else {
-            // Normal path - add if not duplicate
-            if (!this.isMessageDuplicate(message)) {
-              this.messages = [...this.messages, message];
-              // Increment unread count to keep "New" divider in same position
-              if (this.unreadCountOnEntry > 0) {
-                this.unreadCountOnEntry++;
-              }
-            }
-          }
-          // Mark as read — but not while viewing history: the user hasn't seen it
-          if (!this.hasNewerMessages) {
-            this.gridWs.markRead(this.currentChannel.id, message.id);
-          }
-        }
-        // Update channel list (last message preview, unread count)
-        this.updateChannelLastMessage(message);
-        this.cdr.markForCheck();
-      });
+      .subscribe((message) => this.ingestMessage(message));
 
     // Message edited
     this.gridWs.messageEdited$
@@ -533,6 +484,9 @@ export class GridComponent implements OnInit, OnDestroy {
     this.gridWs.unreadUpdate$
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ channelId, unreadCount }) => {
+        // -1 is a server invalidation signal, not an absolute unread count.
+        // The corresponding ingested message updates the local count once.
+        if (unreadCount < 0) return;
         this.channels = this.channels.map((c) =>
           c.id === channelId ? { ...c, unread_count: unreadCount } : c
         );
@@ -805,167 +759,146 @@ export class GridComponent implements OnInit, OnDestroy {
   /**
    * Handle DM notification - add channel to sidebar if not present, increment unread
    */
-  private handleDmNotification(channelId: string, message: GridMessage, senderId: string): void {
-    // Guard against undefined channelId
-    if (!channelId) {
-      console.error('Grid: handleDmNotification called with undefined channelId');
-      return;
-    }
-
-    // Check if channel already exists in our list
-    const existingChannel = this.channels.find((c) => c.id === channelId);
-
-    if (existingChannel) {
-      // Channel exists - update last message and increment unread
-      const isCurrentChannel = this.currentChannel?.id === channelId;
-
-      this.channels = this.channels.map((c) => {
-        if (c.id === channelId) {
-          return {
-            ...c,
-            last_message_at: message.created_at,
-            last_message_preview: message.content.substring(0, 50),
-            // Only increment unread if not viewing this channel
-            unread_count: isCurrentChannel ? (c.unread_count || 0) : (c.unread_count || 0) + 1,
-          };
-        }
-        return c;
-      });
-
-      // Re-sort to bring this DM to top
-      this.channels.sort((a, b) => {
-        const timeA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-        const timeB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-        return timeB - timeA;
-      });
-
-      this.cdr.markForCheck();
-    } else {
-      // Channel doesn't exist - fetch from API and add to list
-      console.log('Grid: Fetching new DM channel:', channelId);
-      this.gridApi.getChannel(channelId).subscribe({
-        next: (channel) => {
-          // Add channel to list with unread count of 1 and last message info
-          const newChannel: GridChannel = {
-            ...channel,
-            last_message_at: message.created_at,
-            last_message_preview: message.content.substring(0, 50),
-            unread_count: 1,
-          };
-
-          // Add to beginning of list (most recent)
-          this.channels = [newChannel, ...this.channels];
-
-          // Populate dm_user for the new DM channel
-          this.populateDmUsers();
-
-          this.cdr.markForCheck();
-          console.log('Grid: Added new DM channel to sidebar:', channel.id);
-        },
-        error: (error) => {
-          console.error('Error fetching DM channel:', channelId, error);
-        },
-      });
-    }
+  private handleDmNotification(channelId: string, message: GridMessage, _senderId: string): void {
+    this.ingestMessage({ ...message, channel: channelId });
   }
 
-  /**
-   * Handle channel notification - update channel in sidebar, increment unread
-   */
-  private handleChannelNotification(channelId: string, message: GridMessage, senderId: string): void {
-    if (!channelId) {
-      console.error('Grid: handleChannelNotification called with undefined channelId');
-      return;
+  private handleChannelNotification(channelId: string, message: GridMessage, _senderId: string): void {
+    this.ingestMessage({ ...message, channel: channelId });
+  }
+
+  /** Channel broadcasts and personal notifications can describe the same event. */
+  private ingestMessage(message: GridMessage): void {
+    if (!message?.id || this.receivedMessageIds.has(message.id)) return;
+    this.receivedMessageIds.add(message.id);
+    if (this.receivedMessageIds.size > 2000) {
+      this.receivedMessageIds.delete(this.receivedMessageIds.values().next().value!);
     }
 
-    // Check if channel exists in our list
-    const existingChannel = this.channels.find((c) => c.id === channelId);
-
-    console.log('Grid: handleChannelNotification', {
-      channelId,
-      existingChannel: existingChannel ? { id: existingChannel.id, name: existingChannel.name, type: existingChannel.channel_type, unread: existingChannel.unread_count } : 'NOT FOUND',
-      totalChannels: this.channels.length,
-      channelIds: this.channels.slice(0, 5).map(c => ({ id: c.id, name: c.name })),
-    });
-
-    if (existingChannel) {
-      const isCurrentChannel = this.currentChannel?.id === channelId;
-
-      // If viewing this channel, add the message directly instead of incrementing unread
-      if (isCurrentChannel) {
-        if (message.parent) {
-          // Reply: bump parent reply_count and route into the open thread panel
-          // if it matches; never inject into the main feed array.
-          this.messages = this.messages.map((m) =>
-            m.id === message.parent ? { ...m, reply_count: m.reply_count + 1 } : m
-          );
-          if (
-            this.threadParentMessage?.id === message.parent &&
-            !this.isMessageDuplicate(message, this.threadReplies)
-          ) {
-            this.threadReplies = [...this.threadReplies, message];
-          }
-        } else if (!this.isMessageDuplicate(message)) {
-          this.messages = [...this.messages, message];
+    if (message.channel === this.currentChannel?.id) {
+      const list = message.parent ? this.threadReplies : this.messages;
+      const pending = message.user_id === this.currentUserId
+        ? list.find(m => m.pending && m.channel === message.channel && m.parent === message.parent &&
+          m.content === message.content && m.user_id === message.user_id)
+        : undefined;
+      if (!pending && list.some(m => m.id === message.id)) return;
+      if (pending) {
+        const confirmed = list.map(m => m === pending ? { ...message, pending: false } : m);
+        if (message.parent) this.threadReplies = confirmed;
+        else this.messages = confirmed;
+      } else if (message.parent) {
+        // Replies never enter the root feed, including the personal-DM path.
+        this.messages = this.messages.map(m => m.id === message.parent
+          ? { ...m, reply_count: (m.reply_count || 0) + 1 } : m);
+        if (this.threadParentMessage?.id === message.parent && !this.isMessageDuplicate(message, this.threadReplies)) {
+          this.threadReplies = this.mergeMessages(this.threadReplies, [message]);
         }
-        this.gridWs.markRead(channelId, message.id);
+      } else if (!this.isMessageDuplicate(message) && !this.isMessageDuplicate(message, this.messageBuffer)) {
+        if (this.isLoadingMessages || this.hasNewerMessages || this.recovering) {
+          this.messageBuffer = [...this.messageBuffer, message];
+        } else {
+          this.messages = this.mergeMessages(this.messages, [message]);
+        }
+        if (this.unreadCountOnEntry > 0) this.unreadCountOnEntry++;
       }
-
-      // Update channel list
-      this.channels = this.channels.map((c) => {
-        if (c.id === channelId) {
-          return {
-            ...c,
-            last_message_at: message.created_at,
-            last_message_preview: message.content.substring(0, 50),
-            // Only increment unread if not viewing this channel
-            unread_count: isCurrentChannel ? (c.unread_count || 0) : (c.unread_count || 0) + 1,
-          };
-        }
-        return c;
-      });
-
-      // Re-sort to bring this channel to top
-      this.channels = [...this.channels].sort((a, b) => {
-        const timeA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-        const timeB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-        return timeB - timeA;
-      });
-
-      console.log('Grid: Channel updated with unread_count', {
-        channelId,
-        newUnreadCount: this.channels.find(c => c.id === channelId)?.unread_count,
-      });
-
-      this.cdr.markForCheck();
-    } else {
-      // Channel not in our list - fetch it and add it
-      // This can happen if the channel wasn't in the initial paginated load
-      console.log('Grid: Channel not found, fetching:', channelId);
-      this.gridApi.getChannel(channelId).subscribe({
-        next: (channel) => {
-          const newChannel: GridChannel = {
-            ...channel,
-            last_message_at: message.created_at,
-            last_message_preview: message.content.substring(0, 50),
-            unread_count: 1,
-          };
-
-          // Add to list and sort
-          this.channels = [newChannel, ...this.channels].sort((a, b) => {
-            const timeA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-            const timeB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
-            return timeB - timeA;
-          });
-
-          this.cdr.markForCheck();
-          console.log('Grid: Added missing channel to sidebar:', channel.id, channel.name);
-        },
-        error: (error) => {
-          console.error('Error fetching channel:', channelId, error);
-        },
-      });
+      // A reply is read only when its own thread is visible; root-feed reads
+      // must never advance to an unseen reply or a hidden/scrolled-up feed.
+      if (!message.parent) this.markLastMessageRead();
     }
+    this.updateChannelLastMessage(message);
+    this.cdr.markForCheck();
+  }
+
+  private mergeMessages(existing: GridMessage[], incoming: GridMessage[]): GridMessage[] {
+    const byId = new Map(existing.map(message => [message.id, message]));
+    incoming.forEach(message => byId.set(message.id, message));
+    const rows = [...byId.values()];
+    // A lost sender acknowledgement can leave a pending row beside its saved
+    // HTTP counterpart. Match only pending own rows in the same conversation.
+    return rows.filter(row => !row.pending || !rows.some(saved => !saved.pending && !saved.error &&
+      saved.user_id === this.currentUserId && saved.user_id === row.user_id &&
+      saved.channel === row.channel && saved.parent === row.parent && saved.content === row.content &&
+      Math.abs(new Date(saved.created_at).getTime() - new Date(row.created_at).getTime()) < 10000))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }
+
+  /** Reassert the subscription even when the transport still looks healthy. */
+  private recoverSelectedConversation(): void {
+    if (this.destroyed || !this.currentChannel) return;
+    if (!this.gridWs.isConnected() && this.gridWs.getConnectionState() !== 'connecting') {
+      this.gridWs.forceReconnect();
+    }
+    this.gridWs.joinChannel(this.currentChannel.id);
+    this.recoveryRequested = true;
+    this.runPendingRecovery();
+  }
+
+  private pauseRecovery(): void {
+    if (!this.recovering) return;
+    this.recoverySubscription.unsubscribe();
+    this.recoverySubscription = new Subscription();
+    this.recoveryRequested = true;
+  }
+
+  private runPendingRecovery(): void {
+    if (this.destroyed || !this.recoveryRequested || this.recovering || this.isLoadingMessages || this.isLoadingNewer || !this.currentChannel) return;
+    this.recoveryRequested = false;
+    const channelId = this.currentChannel.id;
+    // Keep a history-confirmed cursor: a newer live event must not skip a
+    // message missed earlier in the outage. Never move the history window.
+    const cursor = this.recoveryCursor || this.messages.find(m => !m.pending && !m.error)?.id;
+    this.recovering = true;
+    const request = cursor
+      ? this.gridApi.getMessagesAfter(channelId, cursor, 100)
+      : this.gridApi.getMessages(channelId, undefined, 100);
+    let nextCursor = cursor;
+    let completed = false;
+    const recovery = new Subscription();
+    this.recoverySubscription.add(recovery);
+    recovery.add(() => this.recoverySubscription.remove(recovery));
+    recovery.add(request.pipe(
+      expand((page: GridCursorPaginatedResponse<GridMessage>) => {
+        if (!page.has_newer) return EMPTY;
+        if (!page.prev_cursor || page.prev_cursor === nextCursor) throw new Error('Grid catch-up did not advance');
+        nextCursor = page.prev_cursor;
+        return this.gridApi.getMessagesAfter(channelId, page.prev_cursor, 100);
+      }),
+      reduce((pages: GridCursorPaginatedResponse<GridMessage>[], page: GridCursorPaginatedResponse<GridMessage>) => [...pages, page], []),
+      takeUntil(this.destroy$),
+      finalize(() => {
+        this.recovering = false;
+        if (!this.hasNewerMessages) this.mergeBufferedMessages();
+        this.cdr.markForCheck();
+        if (completed) this.runPendingRecovery();
+      })
+    ).subscribe({
+      next: pages => {
+        if (this.currentChannel?.id !== channelId || pages.length === 0) return;
+        const fetched = pages.flatMap(page => page.results || []);
+        const ordered = this.mergeMessages([], fetched);
+        if (this.hasNewerMessages) {
+          const loaded = new Set(this.messages.map(m => m.id));
+          this.messageBuffer = this.mergeMessages(this.messageBuffer, ordered.filter(m => !loaded.has(m.id)));
+        } else {
+          this.messages = this.mergeMessages(this.messages, ordered);
+          this.mergeBufferedMessages();
+          if (!cursor) {
+            this.nextCursor = pages[0].next_cursor || null;
+            this.hasMoreMessages = !!this.nextCursor;
+          }
+        }
+        this.recoveryCursor = ordered[ordered.length - 1]?.id || cursor || null;
+        // Catch-up does not mark messages read. The rendered list reports
+        // an actual visible tail before any read acknowledgement is sent.
+        if (this.threadParentMessage) this.loadThreadReplies();
+        this.cdr.markForCheck();
+      },
+      error: error => {
+        this.recoveryRequested = true;
+        console.error('Grid conversation catch-up failed; retry on return or reopen', error);
+      },
+      complete: () => { completed = true; },
+    }));
   }
 
   /**
@@ -981,7 +914,7 @@ export class GridComponent implements OnInit, OnDestroy {
       myChannels: this.gridApi.getMyChannels(),
       myGroups: this.gridApi.getMyGroups(),
       publicChannelsResponse: this.gridApi.getPublicChannels(),
-    }).subscribe({
+    }).pipe(takeUntil(this.destroy$)).subscribe({
       next: ({ myChannels, myGroups, publicChannelsResponse }) => {
         const publicChannels = publicChannelsResponse.results;
 
@@ -1045,7 +978,7 @@ export class GridComponent implements OnInit, OnDestroy {
       myChannels: this.gridApi.getMyChannels(),
       myGroups: this.gridApi.getMyGroups(),
       publicChannelsResponse: this.gridApi.getPublicChannels(),
-    }).subscribe({
+    }).pipe(takeUntil(this.destroy$)).subscribe({
       next: ({ myChannels, myGroups, publicChannelsResponse }) => {
         // Extract channels from paginated response
         const publicChannels = publicChannelsResponse.results;
@@ -1138,9 +1071,18 @@ export class GridComponent implements OnInit, OnDestroy {
     if (this.currentChannel?.id === channel.id) {
       if (opts.anchorMessageId) {
         this.jumpWithinCurrentChannel(opts.anchorMessageId, opts.parentId);
+      } else {
+        this.recoverSelectedConversation();
       }
       return;
     }
+
+    this.recoverySubscription.unsubscribe();
+    this.recoverySubscription = new Subscription();
+    this.recovering = false;
+    this.recoveryRequested = false;
+    this.recoveryCursor = null;
+    this.receivedMessageIds.clear();
 
     // Leave previous channel
     if (this.currentChannel) {
@@ -1163,10 +1105,8 @@ export class GridComponent implements OnInit, OnDestroy {
     this.isFilesPanelOpen = false; // Close files panel when changing channels
     this.isMembersPopupOpen = false; // Close members popup when changing channels
 
-    // Clear unread count and has_mention immediately when channel is selected
-    this.channels = this.channels.map((c) =>
-      c.id === channel.id ? { ...c, unread_count: 0, has_mention: false } : c
-    );
+    // Preserve unread state until the last rendered root message is actually
+    // visible. Selecting a conversation or starting a fetch is not a read.
 
     // Join new channel via WebSocket
     this.gridWs.joinChannel(channel.id);
@@ -1191,6 +1131,7 @@ export class GridComponent implements OnInit, OnDestroy {
    */
   loadMessages(cursor?: string, onLoaded?: () => void): void {
     if (!this.currentChannel) return;
+    this.pauseRecovery();
 
     // Cancel any in-flight load — its response would belong to a previous
     // channel and must not overwrite the messages array for the new one.
@@ -1214,11 +1155,12 @@ export class GridComponent implements OnInit, OnDestroy {
         }
 
         const messages = response.results || [];
+        if (!cursor) this.recoveryCursor = messages[0]?.id || null;
         console.log('Grid: Received messages:', messages.length, messages);
 
         if (cursor) {
           // Prepend older messages
-          this.messages = [...messages.reverse(), ...this.messages];
+          this.messages = this.mergeMessages(this.messages, messages);
         } else {
           // Initial load - messages come newest first, reverse for display
           this.messages = messages.reverse();
@@ -1241,6 +1183,7 @@ export class GridComponent implements OnInit, OnDestroy {
           this.markLastMessageRead();
         }
         onLoaded?.();
+        this.runPendingRecovery();
       },
       error: (error) => {
         if (this.currentChannel?.id !== channelId) return;
@@ -1280,11 +1223,22 @@ export class GridComponent implements OnInit, OnDestroy {
     );
   }
 
-  private markLastMessageRead(): void {
-    if (this.currentChannel && this.messages.length > 0) {
-      const lastMessage = this.messages[this.messages.length - 1];
-      this.gridWs.markRead(this.currentChannel.id, lastMessage.id);
-    }
+  markLastMessageRead(): void {
+    if (this.readTimer) clearTimeout(this.readTimer);
+    const channelId = this.currentChannel?.id;
+    this.readTimer = setTimeout(() => {
+      this.readTimer = null;
+      const last = this.messages[this.messages.length - 1];
+      if (channelId && this.currentChannel?.id === channelId && last &&
+          !last.parent && !last.pending && !last.error && !document.hidden && document.hasFocus() &&
+          !this.isLoadingMessages && !this.recovering && !this.recoveryRequested && !this.hasNewerMessages &&
+          this.messageListRef?.isMessageVisible(last.id)) {
+        this.gridWs.markRead(channelId, last.id);
+        this.channels = this.channels.map(channel => channel.id === channelId
+          ? { ...channel, unread_count: 0, has_mention: false } : channel);
+        this.cdr.markForCheck();
+      }
+    }, 0);
   }
 
   private resetHistoryMode(): void {
@@ -1363,6 +1317,7 @@ export class GridComponent implements OnInit, OnDestroy {
    */
   private loadMessagesAround(anchorMessageId: string): void {
     if (!this.currentChannel) return;
+    this.pauseRecovery();
     this.activeLoadMessages?.unsubscribe();
 
     this.isLoadingMessages = true;
@@ -1387,6 +1342,7 @@ export class GridComponent implements OnInit, OnDestroy {
         }
 
         this.messages = (response.results || []).slice().reverse();
+        this.recoveryCursor = response.results?.[0]?.id || null;
         this.hasMoreMessages = !!response.next_cursor;
         this.nextCursor = response.next_cursor || null;
         this.hasNewerMessages = !!response.has_newer;
@@ -1400,6 +1356,7 @@ export class GridComponent implements OnInit, OnDestroy {
           this.markLastMessageRead();
         }
 
+        this.runPendingRecovery();
         this.requestHighlight(response.anchor_id);
         if (response.anchor_reply_id) {
           const parent = this.messages.find(m => m.id === response.anchor_id);
@@ -1426,6 +1383,7 @@ export class GridComponent implements OnInit, OnDestroy {
    */
   loadNewerMessages(): void {
     if (!this.currentChannel || !this.hasNewerMessages || !this.newerCursor || this.isLoadingNewer) return;
+    this.pauseRecovery();
     const channelId = this.currentChannel.id;
     this.isLoadingNewer = true;
     this.cdr.markForCheck();
@@ -1448,6 +1406,7 @@ export class GridComponent implements OnInit, OnDestroy {
           this.mergeBufferedMessages();
           this.markLastMessageRead();
         }
+        this.runPendingRecovery();
         this.cdr.markForCheck();
       },
       error: (error) => {
@@ -1893,16 +1852,14 @@ export class GridComponent implements OnInit, OnDestroy {
     if (!this.threadParentMessage) return;
     const parentId = this.threadParentMessage.id;
 
-    this.gridApi.getThreadReplies(parentId).subscribe({
+    this.gridApi.getThreadReplies(parentId).pipe(takeUntil(this.destroy$)).subscribe({
       next: (replies) => {
         // Discard stale responses: the user may have opened a different
         // thread (or closed the panel) while this request was in flight
         if (this.threadParentMessage?.id !== parentId) return;
 
         // Oldest at top, newest at bottom (chronological)
-        this.threadReplies = [...replies].sort(
-          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
+        this.threadReplies = this.mergeMessages(replies, this.threadReplies);
         this.cdr.markForCheck();
       },
       error: (error) => {
@@ -2121,7 +2078,10 @@ export class GridComponent implements OnInit, OnDestroy {
         // Don't increment unread count for:
         // 1. Current channel (user is viewing it)
         // 2. Own messages (sender shouldn't see unread for their own messages)
-        const shouldIncrementUnread = !isCurrentChannel && !isOwnMessage;
+        const viewingTail = isCurrentChannel && !document.hidden && document.hasFocus()
+          && !this.hasNewerMessages && !this.isLoadingMessages && !this.recovering
+          && !!this.messageListRef?.isMessageVisible(this.messages[this.messages.length - 1]?.id);
+        const shouldIncrementUnread = !viewingTail && !isOwnMessage;
 
         return {
           ...c,

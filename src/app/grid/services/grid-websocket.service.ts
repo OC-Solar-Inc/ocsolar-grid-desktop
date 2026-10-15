@@ -27,6 +27,9 @@ import {
 @Injectable()
 export class GridWebsocketService implements OnDestroy {
   private socket: WebSocket | null = null;
+  private connectGeneration = 0;
+  private channelJoinedSubject = new Subject<string>();
+  public channelJoined$ = this.channelJoinedSubject.asObservable();
   private wsUrl: string;
   private reconnectAttempts = 0;
   private reconnectDelay = 1000;
@@ -129,20 +132,15 @@ export class GridWebsocketService implements OnDestroy {
   }
 
   async connect(): Promise<void> {
-    if (this.socket?.readyState === WebSocket.OPEN) {
-      console.log('Grid WebSocket already connected');
-      return;
-    }
+    if (this.socket?.readyState === WebSocket.OPEN ||
+        this.socket?.readyState === WebSocket.CONNECTING ||
+        this.getConnectionState() === 'connecting') return;
 
-    // Clean up any stale socket so its onclose doesn't interfere
-    if (this.socket) {
-      this.socket.onopen = null;
-      this.socket.onmessage = null;
-      this.socket.onerror = null;
-      this.socket.onclose = null;
-      try { this.socket.close(); } catch { /* ignore */ }
-      this.socket = null;
-    }
+    const generation = ++this.connectGeneration;
+    this.clearReconnectTimeout();
+    this.disconnectReason = null;
+    this.stopPingPong();
+    this.closeStaleSocket();
 
     this.connectionStateSubject.next('connecting');
 
@@ -151,11 +149,12 @@ export class GridWebsocketService implements OnDestroy {
       const userDocId = this.authProvider.getCurrentUserDocId();
       const wsEndpoint = `${this.wsUrl}/ws/chat/?token=${token}&user_id=${userDocId}`;
 
+      if (generation !== this.connectGeneration) return;
+      if (!token || !userDocId) throw new Error('Grid authentication is not ready');
       this.socket = new WebSocket(wsEndpoint);
 
       this.socket.onopen = () => {
         console.log('Grid WebSocket connected');
-        this.connectionStateSubject.next('connected');
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
         this.startPingPong();
@@ -163,6 +162,7 @@ export class GridWebsocketService implements OnDestroy {
         this.joinedChannels.forEach((channelId) => {
           this.joinChannel(channelId);
         });
+        this.connectionStateSubject.next('connected');
       };
 
       this.socket.onmessage = (event: MessageEvent) => {
@@ -180,20 +180,17 @@ export class GridWebsocketService implements OnDestroy {
       };
 
       this.socket.onclose = (event) => {
+        if (generation !== this.connectGeneration) return;
         console.log('Grid WebSocket closed:', event.code, event.reason, 'reason:', this.disconnectReason);
         this.stopPingPong();
         this.connectionStateSubject.next('disconnected');
 
-        // Always reconnect unless the client itself chose to disconnect.
-        // Servers and proxies sometimes close cleanly (code 1000) during
-        // restarts — notifications depend on the socket, so never stay down.
-        if (this.disconnectReason !== 'user') {
-          this.attemptReconnect();
-        }
+        if (this.disconnectReason !== 'user') this.attemptReconnect();
 
         this.disconnectReason = null;
       };
     } catch (error) {
+      if (generation !== this.connectGeneration) return;
       console.error('Error connecting to Grid WebSocket:', error);
       this.connectionStateSubject.next('disconnected');
       this.attemptReconnect();
@@ -201,6 +198,7 @@ export class GridWebsocketService implements OnDestroy {
   }
 
   disconnect(): void {
+    ++this.connectGeneration;
     this.disconnectReason = 'user';
     this.stopPingPong();
     this.clearReconnectTimeout();
@@ -223,6 +221,7 @@ export class GridWebsocketService implements OnDestroy {
         break;
 
       case 'channel_joined':
+        this.channelJoinedSubject.next((data as any).channel_id);
         console.log('Grid WebSocket: Joined channel', (data as any).channel_id);
         break;
 
@@ -586,26 +585,24 @@ export class GridWebsocketService implements OnDestroy {
    * Called when the system resumes from sleep or user clicks retry.
    */
   forceReconnect(): void {
-    console.log('Grid WebSocket: Force reconnect requested');
+    ++this.connectGeneration;
     this.stopPingPong();
     this.clearReconnectTimeout();
+    this.closeStaleSocket();
     this.reconnectAttempts = 0;
-    this.reconnectDelay = 1000;
     this.disconnectReason = null;
-
-    if (this.socket) {
-      // Detach handlers so the old socket's onclose doesn't schedule a
-      // second, competing reconnect cycle alongside the connect() below
-      this.socket.onopen = null;
-      this.socket.onmessage = null;
-      this.socket.onerror = null;
-      this.socket.onclose = null;
-      try { this.socket.close(1000, 'Force reconnect'); } catch { /* ignore */ }
-      this.socket = null;
-    }
-
     this.connectionStateSubject.next('reconnecting');
-    this.connect();
+    void this.connect();
+  }
+
+  private closeStaleSocket(): void {
+    if (!this.socket) return;
+    this.socket.onopen = null;
+    this.socket.onmessage = null;
+    this.socket.onerror = null;
+    this.socket.onclose = null;
+    try { this.socket.close(); } catch { /* already closed */ }
+    this.socket = null;
   }
 
   private clearReconnectTimeout(): void {
